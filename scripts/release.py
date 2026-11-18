@@ -68,7 +68,7 @@ def digest(data):
 def archives(dist):
     """只接受四個指定目標，重算 checksum 並檢查安全壓縮路徑。"""
     hashes = {}
-    for line in (dist / 'checksums.txt').read_text().splitlines():
+    for line in (dist / 'checksums.txt').read_text(encoding='utf-8').splitlines():
         sha, name = line.split(maxsplit=1)
         name = name.lstrip('*')
         if Path(name).name != name or name in hashes or not re.fullmatch('[0-9a-f]{64}', sha):
@@ -289,7 +289,7 @@ def update_packages(api, release_api, dist, tag, commit):
         if name not in by_name:
             raise ValueError('Release 缺少必要資產')
         verified_asset((dist/name).read_bytes(),release_api.request(f'/repos/{REPOSITORY}/releases/assets/{by_name[name]["id"]}',raw=True))
-    targets = json.loads(Path('packaging/targets.json').read_text())
+    targets = json.loads(Path('packaging/targets.json').read_text(encoding='utf-8'))
     for value in targets.values():
         destination(value)
     contents = packages(items, tag)
@@ -332,11 +332,11 @@ def main():
         return
     if not args.execute or os.environ.get('RELEASE_APPROVED') != args.tag:
         raise ValueError('遠端寫入需要明確 execute 與指定 tag 核准')
-    commit = subprocess.check_output(['git','rev-parse',args.tag+'^{commit}'],text=True).strip()
-    head = subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-    if not re.fullmatch('[0-9a-f]{40}',commit) or commit != head or subprocess.check_output(['git','status','--porcelain'],text=True).strip():
+    commit = subprocess.check_output(['git','rev-parse',args.tag+'^{commit}'],text=True,encoding='utf-8').strip()
+    head = subprocess.check_output(['git','rev-parse','HEAD'],text=True,encoding='utf-8').strip()
+    if not re.fullmatch('[0-9a-f]{40}',commit) or commit != head or subprocess.check_output(['git','status','--porcelain'],text=True,encoding='utf-8').strip():
         raise ValueError('正式發佈需要乾淨且與 tag 相同的來源')
-    metadata = json.loads((args.dist/'metadata.json').read_text())
+    metadata = json.loads((args.dist/'metadata.json').read_text(encoding='utf-8'))
     if metadata.get('commit') != commit or metadata.get('version') != args.tag[1:]:
         raise ValueError('建置來源與 tag 不一致')
     if args.stage == 'update' and version(args.tag)[1]:

@@ -115,7 +115,7 @@ class ArtifactTests(unittest.TestCase):
                             info=tarfile.TarInfo(filename);info.size=len(data)
                             archive.addfile(info,io.BytesIO(data))
                 lines.append(release.digest(path.read_bytes())+'  '+name)
-        (self.dist/'checksums.txt').write_text('\n'.join(lines)+'\n')
+        (self.dist/'checksums.txt').write_text('\n'.join(lines)+'\n',encoding='utf-8')
 
     def test_archives_and_packages(self):
         items=release.archives(self.dist)
@@ -230,7 +230,7 @@ class ArtifactTests(unittest.TestCase):
 
     def test_queue_compatibility_rejects_invalid_queue_and_other_errors(self):
         import lint_workflows
-        text=Path('.github/workflows/release.yml').read_text()
+        text=Path('.github/workflows/release.yml').read_text(encoding='utf-8')
         line=next(i for i,s in enumerate(text.splitlines(),1) if s=='  queue: max')
         diagnostic={'filepath':'.github/workflows/release.yml','line':line,'column':3,'kind':'syntax-check','message':lint_workflows.QUEUE_MESSAGE}
         self.assertEqual(lint_workflows.remaining_errors(text,[diagnostic]),[])
@@ -242,7 +242,7 @@ class ArtifactTests(unittest.TestCase):
             lint_workflows.remaining_errors(text.replace('cancel-in-progress: false','cancel-in-progress: true'),[diagnostic])
 
     def test_release_workflow_preserves_pending_runs(self):
-        text=Path('.github/workflows/release.yml').read_text()
+        text=Path('.github/workflows/release.yml').read_text(encoding='utf-8')
         block=text.split('concurrency:',1)[1].split('jobs:',1)[0]
         self.assertIn('queue: max',block)
         self.assertIn('cancel-in-progress: false',block)

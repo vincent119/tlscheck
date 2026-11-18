@@ -6,6 +6,9 @@ on:
   workflow_call:
 permissions:
   contents: read
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: 'utf-8'
 jobs:
   native:
     needs: packages

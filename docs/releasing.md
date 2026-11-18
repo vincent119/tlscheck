@@ -92,6 +92,22 @@ python3 -B scripts/release.py packages --tag v0.0.0-snapshot-SHORTCOMMIT-dirty
 
 Optional Make targets: `make release-check`, `make snapshot`, `make verify-packages`. Python is maintenance tooling only, not a runtime requirement for the CLI.
 
+Python maintenance tools and tests explicitly use UTF-8 for text files and captured subprocess text. Both CI and release workflows set `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8` globally, preventing the Windows default code page from breaking Chinese YAML or log messages. Before running the Python commands manually, configure the current terminal session:
+
+```bash
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+```
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
+```
+
+These settings apply only to the current session and its children, without changing user-wide settings. Encoding regressions disable UTF-8 mode in a child process, treat implicit-encoding warnings as errors, and check installation/lint boundaries and Chinese stdout/stderr. This does not establish native Windows CI success.
+
+
 ## Protected release workflow
 
 `.github/workflows/ci.yml` tests on `macos-15` (arm64), `macos-15-intel` (amd64) and `windows-2025` (amd64). Native jobs download and install the snapshot archive in isolation; Windows arm64 remains cross-build only. The local machine cannot establish that these hosted jobs have passed. Actions are pinned to commit SHAs, Go to 1.27.4 and GoReleaser to 2.14.3.

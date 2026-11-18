@@ -23,15 +23,15 @@ def main():
     with tempfile.TemporaryDirectory(prefix='tlscheck-install-') as root:
         path=Path(root)/('tlscheck.exe' if system=='windows' else 'tlscheck')
         sentinel=Path(root)/'config.json'
-        sentinel.write_text('{"language":"zh-TW"}\n')
+        sentinel.write_text('{"language":"zh-TW"}\n',encoding='utf-8')
         for stage in ['安裝','重裝升級']:
             temporary=path.with_suffix('.new')
             temporary.write_bytes(item['binary']);temporary.chmod(0o755)
             temporary.replace(path)
-            result=subprocess.run([str(path),'--version'],capture_output=True,text=True,check=True)
+            result=subprocess.run([str(path),'--version'],capture_output=True,text=True,encoding='utf-8',check=True)
             if item['version'] not in result.stdout:
                 raise ValueError('版本資訊不符')
-            if sentinel.read_text()!='{"language":"zh-TW"}\n':
+            if sentinel.read_text(encoding='utf-8')!='{"language":"zh-TW"}\n':
                 raise ValueError('隔離設定被改寫')
             print(stage+'：原生 '+system+'/'+arch+' --version 通過')
     after=config.read_bytes() if config.exists() else None

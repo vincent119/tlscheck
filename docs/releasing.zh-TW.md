@@ -92,6 +92,22 @@ python3 -B scripts/release.py packages --tag v0.0.0-snapshot-SHORTCOMMIT-dirty
 
 選用 Make 指令：`make release-check`、`make snapshot`、`make verify-packages`。Python 僅用於維護流程，CLI 執行不需要它。
 
+Python 維護工具與測試明確使用 UTF-8 讀寫文字檔，並以 UTF-8 解碼子程序文字輸出。CI 與發佈 workflow 全域設定 `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，避免 Windows 的預設 code page 無法讀取中文 YAML 或輸出中文日誌。手動執行上述 Python 指令前，請在目前終端工作階段設定：
+
+```bash
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+```
+
+Windows PowerShell：
+
+```powershell
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
+```
+
+這些設定僅套用目前工作階段與子程序，不修改使用者全域環境。編碼回歸會在子程序關閉 UTF-8 模式並將隱含編碼警告視為錯誤，再驗證安裝／lint 邊界與中文 stdout／stderr；這不等同 Windows 原生 CI 已通過。
+
+
 ## 受保護的發佈流程
 
 `.github/workflows/ci.yml` 在 `macos-15`（arm64）、`macos-15-intel`（amd64）與 `windows-2025`（amd64）測試。原生 job 下載 snapshot 壓縮檔並隔離安裝；Windows arm64 仍只有交叉建置。本機驗證不能證明這些遠端 job 已通過。Actions 固定 commit SHA、Go 固定 1.27.4、GoReleaser 固定 2.14.3。

@@ -27,14 +27,14 @@ def remaining_errors(text, diagnostics):
 
 def main():
     tool=sys.argv[1] if len(sys.argv)>1 else 'actionlint'
-    result=subprocess.run([tool,'-format','{{json .}}'],capture_output=True,text=True)
+    result=subprocess.run([tool,'-format','{{json .}}'],capture_output=True,text=True,encoding='utf-8')
     if result.stderr:
         print(result.stderr,end='',file=sys.stderr)
     try:
         errors=json.loads(result.stdout or '[]') or []
         if result.returncode and not errors:
             raise ValueError('非零結束碼但沒有可核對診斷')
-        errors=remaining_errors(Path('.github/workflows/release.yml').read_text(),errors)
+        errors=remaining_errors(Path('.github/workflows/release.yml').read_text(encoding='utf-8'),errors)
     except (ValueError,KeyError,TypeError):
         raise SystemExit('Workflow 或 lint 輸出無法驗證')
     if result.returncode not in [0,1] or result.returncode==1 and not result.stdout.strip():
