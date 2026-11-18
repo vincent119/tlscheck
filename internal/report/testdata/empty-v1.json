@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "tool": {
+    "name": "tlscheck",
+    "version": "fixture",
+    "commit": "unknown"
+  },
+  "generated_at": "2026-11-18T00:00:00Z",
+  "language": "en",
+  "inputs": [],
+  "local": {
+    "certificates": [],
+    "keys": [],
+    "pairs": [],
+    "checks": [],
+    "issues": []
+  },
+  "remote": [],
+  "summary": {
+    "passed": 0,
+    "failed": 0,
+    "not_performed": 0,
+    "warnings": 0,
+    "highest_severity": "none",
+    "check_exit_code": 0
+  }
+}

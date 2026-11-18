@@ -91,8 +91,20 @@ type CertificateResult struct {
 	Trust         TrustResult
 }
 
+// CertificateOptions 只調整提醒，不影響憑證時間與信任驗證。
+type CertificateOptions struct{ ExpiryWarningDays int }
+
 // AnalyzeCertificate 只分析公開資訊，不宣稱已建立信任。
 func AnalyzeCertificate(cert *x509.Certificate, now time.Time) (CertificateInfo, error) {
+	return AnalyzeCertificateWithOptions(cert, now, CertificateOptions{ExpiryWarningDays: 30})
+}
+
+// AnalyzeCertificateWithOptions 使用同一分析時間及明確提醒門檻。
+func AnalyzeCertificateWithOptions(cert *x509.Certificate, now time.Time, options CertificateOptions) (CertificateInfo, error) {
+	if options.ExpiryWarningDays < 0 || options.ExpiryWarningDays > 36500 {
+		return CertificateInfo{}, errors.New("無效的到期提醒天數")
+	}
+
 	if cert == nil || len(cert.Raw) == 0 || cert.SerialNumber == nil || now.IsZero() {
 		return CertificateInfo{}, errors.New("缺少已解析憑證或固定分析時間")
 	}
@@ -138,7 +150,7 @@ func AnalyzeCertificate(cert *x509.Certificate, now time.Time) (CertificateInfo,
 	if seconds < 0 && seconds%86400 != 0 {
 		info.RemainingDays--
 	}
-	info.ExpiringSoon = !info.Expired && cert.NotAfter.Sub(now) <= 30*24*time.Hour
+	info.ExpiringSoon = options.ExpiryWarningDays > 0 && !info.Expired && cert.NotAfter.Sub(now) <= time.Duration(options.ExpiryWarningDays)*24*time.Hour
 	info.SelfSigned = info.SelfIssued && cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature) == nil
 	return info, nil
 }

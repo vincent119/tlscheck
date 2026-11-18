@@ -57,7 +57,11 @@ jobs:
       - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           version: v2.14.3
-          args: check
+          install-only: true
+      - name: GoReleaser 版本與設定檢查
+        run: |
+          goreleaser --version
+          goreleaser check
       - name: Workflow 語法檢查
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12

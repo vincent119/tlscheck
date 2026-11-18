@@ -44,7 +44,7 @@ tlscheck --version
 
 ## 發佈準備與失敗重試邊界
 
-已實作 GitHub Actions workflow 與 GoReleaser v2.14.3 設定；本機 snapshot、壓縮檔與校驗通過，尚未執行遠端 workflow 或正式發佈。發佈前確認工具版本、workflow 權限、真實 tap／bucket 目的地與 owner、版本注入（`main.version`、`main.commit`）、架構矩陣、壓縮檔內容、SHA-256，以及兩種語言文件與 LICENSE。首版目標為 v0.1.0，不代表此版本已存在。
+已實作 GitHub Actions workflow 與 GoReleaser v2.14.3 設定；本機 snapshot、壓縮檔與校驗通過；先前遠端 CI 的 packages 步驟失敗，本輪 PATH 修正尚未推送，完整跨平台結果待確認，未正式發佈。發佈前確認工具版本、workflow 權限、真實 tap／bucket 目的地與 owner、版本注入（`main.version`、`main.commit`）、架構矩陣、壓縮檔內容、SHA-256，以及兩種語言文件與 LICENSE。首版目標為 v0.1.0，不代表此版本已存在。
 
 不發佈建置與建立 tag、push、GitHub Release、寫入套件庫必須分開；發佈需要明確授權。在設定與權限尚未驗證前，不提供正式發佈命令。
 
@@ -109,3 +109,15 @@ python3 -B scripts/release.py packages --tag v0.0.0-snapshot-SHORTCOMMIT-dirty
 共用發佈 concurrency group 使用 `queue: max` 與 `cancel-in-progress: false`。GitHub 最多保留 100 個 pending，超額仍可能取消，佇列順序不保證等於 tag／版本順序，因此仍需版本比較。Actionlint 1.7.12 尚不認得此官方欄位；CI 透過 `scripts/lint_workflows.py` 驗證精確 concurrency 契約，只接受預期檔案／行號的該項未知欄位診斷，其餘錯誤仍會失敗。安裝固定版 Actionlint 後，可執行 `python3 -B scripts/lint_workflows.py`。工具未來支援此欄位後，wrapper 仍檢查佇列契約，不再需要接受該項診斷。本機未驗證遠端排程行為。
 
 憑證 SAN URI 逐筆顯示，保留階層式 URI 的識別路徑（包含 SPIFFE 路徑），移除帳密、查詢與片段。不透明或無效 URI 以 `[URI]` 代替，避免回顯嵌入帳密。一般公開文字與本機路徑不猜測為網路 URL，只移除終端控制字元。
+
+## CLI 相容性更新
+
+參數與輸出以 [README](../README.zh-TW.md) 為準：預設 table，新增四格式／安全 output、強制 local/remote、語系覆寫、settings 與四 shell 補全。一般操作仍不寫設定；僅 settings 明確儲存例外。原生 Windows Console／ACL／提交、Fish 互動與四目標原生執行尚需平台驗證。本次不修改 CI 或建立發佈。
+
+八項 CLI 審查修正已加入回歸：補全偵錯無寫入、空旗標值、shell help、終端斷線、ACL 保存／失敗清理、advice code、table 分隔符及逐輸入摘要。macOS ACL 透過固定 SDK 的有界原生屬性呼叫處理，CLI 不依賴外部 chmod／Python；測試才使用這些工具。Windows DACL 已有原生測試來源與交叉編譯，尚未以此宣稱 Windows 執行通過。
+
+## CI 封裝工具 PATH 修正
+
+固定版本 Action 只有 `install-only: true` 路徑會將安裝目錄加入後續 steps 的 PATH，因此 CI 先顯式安裝 v2.14.3，再於 shell 執行 `goreleaser --version`、`goreleaser check` 及既有 snapshot。Action SHA、唯讀 contents 權限、`--snapshot --skip=publish` 與 release.disable 保持不變。回歸檢查涵蓋安裝／執行順序與禁止發佈；本機成功不等於 GitHub runner 已通過。
+
+行為依據：[固定版本 Action 原始碼](https://github.com/goreleaser/goreleaser-action/blob/e435ccd777264be153ace6237001ef4d979d3a7a/src/main.ts)。

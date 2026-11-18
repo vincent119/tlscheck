@@ -24,7 +24,7 @@ go build -o bin/tlscheck.exe ./cmd/tlscheck
 .\bin\tlscheck.exe --version
 ```
 
-不帶參數會顯示說明並回傳 0。未修改的開發建置顯示版本 `development`、來源 commit `unknown`。`--version` 必須單獨使用；未知旗標（包含 `--help`、`--language`）或混合版本旗標與目標會回傳 2。本機檔名若以 `-` 開頭，請加上 `./` 或 `.\` 路徑前綴。
+不帶參數會顯示說明並回傳 0。未修改的開發建置顯示版本 `development`、來源 commit `unknown`。`--help`／`-h` 顯示說明，`--version`／`-V` 顯示版本；可搭配 `--language`／`-L`，不得混用檢查目標或一般檢查旗標。未知旗標與無效組合回傳 2。本機檔名若以 `-` 開頭，可加上 `./`、`.\` 路徑前綴，或放在 `--` 後。
 
 目前可從原始碼建置。已驗證四目標本機 snapshot 封裝及 macOS arm64 手動壓縮檔安裝；正式 Release、Homebrew／Scoop 安裝、簽章、公證與 Windows 原生執行尚未驗證。套件待確認資料與驗證邊界見[安裝與發佈維護](docs/releasing.zh-TW.md)。
 
@@ -71,23 +71,81 @@ HTTPS URL 必須使用標準 `https://`；預設連接埠為 443，明確指定�
 
 接受多個 PEM 區塊。部分區塊損壞或不支援時，仍保留有效物件，最終結束碼為 2。不支援加密私鑰，不嘗試解密，也不提示輸入密碼。不支援 PKCS#12/PFX 與其他私鑰演算法。
 
+## 完整參數與輸出
+
+| 參數 | 短參數 | 預設／用途 |
+|---|---|---|
+| `[target-or-file]...` | | 自動辨識，既有檔案優先 |
+| `--remote TARGET` | `-r` | 強制遠端，可重複，不讀同名本機檔案 |
+| `--local PATH` | `-l` | 強制本機，可重複，缺檔不連線 |
+| `--language CODE` | `-L` | 本次語系，en／zh-TW／zh-CN |
+| `--format FORMAT` | `-f` | table（預設）／json／html／markdown |
+| `--output PATH` | `-o` | 預設 `-`，代表 stdout |
+| `--overwrite` | | 預設關閉，須搭配非 `-` 的 output |
+| `--timeout DURATION` | `-t` | 10s，範圍 1ms–5m |
+| `--expiry-warning-days DAYS` | | 30，範圍 0–36500，0 停用提醒 |
+| `--settings` | `-s` | 獨立互動語系／theme 設定 |
+| `--help` | `-h` | 說明，結束碼 0 |
+| `--version` | `-V` | 版本，結束碼 0 |
+| `--` | | 之後全視為位置輸入 |
+
+位置、remote 與 local 依命令列出現順序檢查，不去重。remote/local 每次只接受一個值，逗號不拆分。其餘旗標不得重複；無值布林旗標不能寫成 `--overwrite=true`。必填值不可省略或設為空字串，包含 `--remote=`／`--local=`；此類錯誤不建立報告檔。`--settings` 不與檢查／語系旗標混用；`--settings --help` 可不進選單查看說明。只有語系旗標時顯示說明；只有一般執行旗標卻無目標時回傳 2。
+
+```sh
+./bin/tlscheck -r example.com --local ./local/site.pem -L zh-TW
+./bin/tlscheck 'https://example.com:8443/' -t 5s --expiry-warning-days 14
+./bin/tlscheck -l ./local/site.pem -f json -o ./report.json
+./bin/tlscheck -l ./local/site.pem -f html -o ./report.html --overwrite
+./bin/tlscheck -l ./local/site.pem -f markdown
+./bin/tlscheck --settings
+```
+
+報告格式不依副檔名猜測。output 父目錄必須已存在；不展開 `~`。預設不覆蓋既有檔案；拒絕目錄、特殊檔案、symlink，以及與輸入／設定同檔或 hardlink 的目的地。完整序列化、暫存寫入、同步與關閉成功後才提交；若輸出失敗，程序回傳 2。JSON 的 `summary.check_exit_code` 只描述檢查結果，程序另可能因 I/O 失敗回傳 2。macOS 新報告檔使用 0600 並移除繼承 ACL；覆寫時保存原生 ACL、擁有者及群組。若安全屬性無法可靠保存，或 ACL 會妨礙提交／失敗清理，會拒絕覆寫並保留原檔。Windows 使用受保護 DACL 並檢查既有安全屬性，原生 ACL／提交語意仍需 Windows 實測。檢查到目的地快照變更即停止；快照與重新命名之間不具有對任意外部程序的 compare-and-swap 保證。
+
+JSON 為單一 UTF-8 物件、兩空格縮排及檔尾換行，固定 `schema_version: 1`。頂層包含 `tool`、`generated_at`（UTC）、`language`、依序 `inputs`、`local`、`remote` 與 `summary`。狀態固定為 `passed`／`failed`／`not_performed`；嚴重度為 `none`／`verification`／`execution`。代碼固定、說明依語系翻譯，空集合為 `[]`，未觀測 TLS 為 `null`。`advice` 為 `null` 或 `{ "code": "advice.…", "message": "…" }`，代碼不隨語系變更。table／HTML／Markdown 另有逐輸入結果與最高嚴重度摘要，以及 key ID／certificate ID 配對表；全域計數不因衍生視圖重複累計。table 將反斜線顯示為 `\\`、pipe 顯示為 `\u007c`，其他格式保留各自安全文字。憑證以完整 SHA-256 指紋識別，私鑰僅含逐來源識別碼與公開資訊；不輸出私鑰內容或原始完整 URL。HTML 不載入外部資源、不執行 JavaScript，也不自動開瀏覽器。
+
+## 指令自動完成
+
+`completion` 是保留的輔助子命令。檢查同名主機可用 `-r completion` 或 `-- completion`，同名檔案可用 `-l completion`。`completion SHELL --help`／`-h` 顯示該層說明。隱藏補全不回顯原始錯誤；生成腳本的偵錯函式不寫檔，`BASH_COMP_DEBUG_FILE` 不會啟用寫入。補全不連線、不讀設定或憑證內容；檔名補全可列舉目錄。Bash 須先載入與其版本相容的 bash-completion，提供 `_get_comp_words_by_ref`／`_init_completion`；僅 source 產生的腳本不足以補齊此 shell 依賴。目前本機缺少該套件，Bash 只完成腳本語法與協定驗證。
+
+四種 shell 皆支援 `--no-descriptions` 及 `-L`／`--language`，不接受一般檢查旗標。
+
+```sh
+# Bash
+source <(./bin/tlscheck completion bash)
+# Zsh
+source <(./bin/tlscheck completion zsh)
+# Fish
+./bin/tlscheck completion fish | source
+# 只產生不含描述的腳本
+./bin/tlscheck completion zsh --no-descriptions
+```
+
+PowerShell：
+
+```powershell
+.\bin\tlscheck.exe completion powershell | Out-String | Invoke-Expression
+```
+
+以上在目前 shell 載入；持久啟用時將對應指令加入自己的 shell 啟動檔。腳本生成及本機可用 shell 的語法驗證，不等於 Windows／Fish 原生互動已通過。
+
 ## 語系設定
 
-只有 `config.json` 的 `language` 欄位會選擇介面語系。不提供語系旗標或語系環境變數覆寫，也不搜尋工作目錄。平台設定目錄本身由 `os.UserConfigDir()` 決定。
+本次語系可用 `--language en|zh-TW|zh-CN`／`-L` 指定，優先於 JSON 與預設英文。有效 CLI 語系不讀取設定檔，也不儲存。不支援語系環境變數或自訂設定路徑；平台目錄由 `os.UserConfigDir()` 決定。
 
 | 平台 | 設定檔 |
 |---|---|
 | macOS | `~/Library/Application Support/tlscheck/config.json` |
 | Windows | `%AppData%\tlscheck\config.json` |
 
-程式不會建立、修改或刪除設定檔。若需選擇語系，請手動建立目錄，再用編輯器建立檔案；儲存為 UTF-8、無 BOM，選用以下其中一個完整 JSON 物件：
+執行 `tlscheck --settings`／`-s` 開啟互動選單。stdin 與 stderr 都必須連接終端；選單使用 stderr，stdout 保持空白。方向鍵移動、Enter 選擇、Esc 返回或取消、Ctrl+C 取消、`t` 開啟 theme。macOS 終端斷線會退出且不儲存。僅選擇「儲存並離開」才寫入設定，取消不寫。損壞或有未知欄位的既有設定須先手動修復。theme 為 `normal`／`dark`／`light`，只影響選單。也可手動建立 UTF-8、無 BOM 的 JSON：
 
 ```json
 {"language":"en"}
 ```
 
 ```json
-{"language":"zh-TW"}
+{"language":"zh-TW","theme":"normal"}
 ```
 
 ```json
@@ -102,6 +160,10 @@ HTTPS URL 必須使用標準 `https://`；預設連接埠為 443，明確指定�
 | JSON／UTF-8 無效、根不是物件或有尾隨資料 | 英文提醒並回退 |
 | 非字串值（包含 `null`）、未知或重複鍵 | 英文提醒並回退 |
 | 除精確的 `en`、`zh-TW`、`zh-CN` 或空字串以外的值 | 英文提醒並回退 |
+
+缺少或空字串 theme 使用 normal；不支援的 theme 會提醒並使用 normal。一般檢查、查詢與補全不寫設定。
+
+table／HTML／Markdown 的輸入模式、嚴重度、檢查名稱、階段與 URI 遮蔽原因依語系顯示；JSON 識別碼、設定值、憑證原值及路徑保持不變。語系選項保留母語名稱，theme 選項使用翻譯標籤。若本地與英文模板都無法呈現，最終保底提示也依有效語系顯示；未知語系使用英文，不回顯內部訊息代碼。
 
 設定提醒寫入 stderr，不單獨改變結束碼。缺少翻譯時回退英文。主機名稱、路徑、演算法與憑證公開原值保留原文；顯示時移除不安全的終端控制字元及 URL 附加內容。
 
@@ -121,17 +183,17 @@ RSA 執行標準有效性檢查。ECDSA 檢查私密純量範圍、公開點是�
 
 | 結束碼 | 意義 |
 |---|---|
-| 0 | 適用檢查通過、說明／版本成功，或只有到期／設定提醒 |
+| 0 | 適用檢查通過、說明／版本／補全成功、設定儲存或取消，或只有到期／設定提醒 |
 | 1 | 憑證、私鑰、信任或配對檢查失敗 |
 | 2 | 輸入、解析、不支援格式、連線、逾時、取消或輸出錯誤 |
 
 取最高等級：2＞1＞0。單項輸入失敗不停止其餘輸入；無效 CLI 旗標組合會在檢查前拒絕。狀態分為通過、失敗、未執行；未執行不等於通過，也不單獨造成失敗。彙整計數對應實際列出的檢查，不是輸入檔案數。
 
-完整報告與檢查失敗原因寫入 stdout。設定提醒與執行診斷寫入 stderr；執行錯誤可能同時出現在完整報告與診斷流。
+預設 table 報告與檢查失敗原因寫入 stdout。指定 `--output PATH` 時完整報告只寫入檔案，不在 stdout 顯示儲存提示。設定提醒與執行診斷寫入 stderr；執行錯誤可能同時出現在完整報告與診斷流。
 
-每份本機憑證／私鑰檔案的實際讀取上限為 10 MiB。每個遠端目標的 DNS／TCP／TLS 握手共用 10 秒期限，不是每個階段各 10 秒。平台信任操作有其平台取消限制。時間使用 UTC；剩餘天數向下取整，剛過期的憑證可顯示 -1 天。尚未過期且 30 × 24 小時內到期的憑證會提醒，提醒本身不改變結束碼。
+每份本機憑證／私鑰檔案的實際讀取上限為 10 MiB。每個遠端目標的 DNS／TCP／TLS 握手預設共用 10 秒期限（可用 `--timeout`／`-t` 調整至 1ms–5m），不是每個階段各 10 秒。平台信任操作有其平台取消限制。時間使用 UTC；剩餘天數向下取整，剛過期的憑證可顯示 -1 天。尚未過期且預設 30 × 24 小時內到期的憑證會提醒；`--expiry-warning-days` 可設 0–36500，0 停用提醒但保留過期驗證，提醒本身不改變結束碼。
 
-輸出為無色彩、無動畫的純文字。tlscheck 不申請、續期或部署憑證，不檢查網頁內容、不掃描加密套件、不解密私鑰，也不管理系統信任。規劃首版產物未簽章、未公證；目前沒有已驗證的簽章／公證發佈版本。
+報告支援 table、JSON、獨立離線 HTML 與 GFM Markdown，不含終端色彩或動畫。tlscheck 不申請、續期或部署憑證，不檢查網頁內容、不掃描加密套件、不解密私鑰，也不管理系統信任。規劃首版產物未簽章、未公證；目前沒有已驗證的簽章／公證發佈版本。
 
 ## 開發與維護
 

@@ -1,15 +1,16 @@
-// Package app 編排唯讀檢查，不在函式庫退出程序。
+// Package app 編排唯讀檢查及明確報告／設定輸出，不在函式庫退出程序。
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/vincent119/tlscheck/internal/check"
 	"github.com/vincent119/tlscheck/internal/config"
+	"github.com/vincent119/tlscheck/internal/filetxn"
 	"github.com/vincent119/tlscheck/internal/i18n"
 	"github.com/vincent119/tlscheck/internal/input"
 	"github.com/vincent119/tlscheck/internal/model"
@@ -29,101 +30,153 @@ type App struct {
 
 // Run 只回傳統一結束碼。
 func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer) int {
-	cfg := a.Load(ctx)
-	w := &report.Writer{Out: out, Diagnostics: diagnostics, T: i18n.New(cfg.Config.Language)}
-	for _, warning := range cfg.Warnings {
-		if _, err := fmt.Fprintln(diagnostics, warning.Message()); err != nil {
-			w.Err = err
-		}
-	}
-	finish := func(code int) int {
-		if w.Err != nil {
-			return 2
-		}
+	if handled, code := a.completion(ctx, args, out, diagnostics); handled {
 		return code
 	}
-	if len(args) == 0 {
-		for _, id := range []string{"help.usage", "help.description", "help.targets", "help.version", "help.language"} {
-			w.Text(id)
-		}
-		return finish(0)
+	options, err := parseOptions(args)
+	if err != nil {
+		return argumentError(out, diagnostics, diagnosticLanguage(args))
 	}
-	if len(args) == 1 && args[0] == "--version" {
-		w.Field("field.version", a.Version)
-		w.Field("field.commit", a.Commit)
-		return finish(0)
+	cfg := config.Result{Config: config.Config{Language: options.Language, Theme: "normal"}}
+	if options.Language == "" {
+		cfg = a.Load(ctx)
 	}
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "-") {
-			w.Outcome("field.target", check.Outcome{Status: check.Failed, Code: "cli.invalid_arguments", Class: check.ExecutionFailure})
-			return finish(2)
+	t := i18n.New(cfg.Config.Language)
+	for _, warning := range cfg.Warnings {
+		if _, err := fmt.Fprintln(diagnostics, warning.Message()); err != nil {
+			return 2
 		}
+	}
+	if options.Help {
+		return writeHelp(out, t, options.Settings)
+	}
+	if options.Version {
+		if _, err := fmt.Fprintf(out, "tlscheck %s (%s)\n", report.Safe(a.Version), report.Safe(a.Commit)); err != nil {
+			return 2
+		}
+		return 0
+	}
+	if options.Settings {
+		return runSettings(ctx, diagnostics, cfg.Config)
+	}
+	var destination *filetxn.Transaction
+	if options.Output != "-" {
+		protected := input.NewParser().LocalPaths(ctx, options.Inputs)
+		configPath, pathErr := config.Path()
+		if pathErr != nil {
+			return diagnosticError(diagnostics, t, "cli.output_failed")
+		}
+		protected = append(protected, configPath)
+		destination, err = filetxn.Prepare(ctx, options.Output, options.Overwrite, protected)
+		if err != nil {
+			return diagnosticError(diagnostics, t, "cli.output_failed")
+		}
+		defer destination.Close()
 	}
 	now := a.Now().UTC()
-	inputs := a.Parse(ctx, args)
+	inputs := a.parseInputs(ctx, options.Inputs)
 	var certs []model.ParsedCertificate
 	var keys []model.ParsedKey
 	for _, item := range inputs {
 		certs = append(certs, item.Certificates...)
 		keys = append(keys, item.Keys...)
 	}
-	local := a.Local(ctx, certs, now)
-	pairs := a.Pair(ctx, keys, certs)
-	code := int(local.Failure())
-	if int(pairs.Failure()) > code {
-		code = int(pairs.Failure())
+	var local check.LocalResult
+	if a.Local != nil {
+		local = a.Local(ctx, certs, now)
+	} else {
+		local = check.NewAnalyzerWithOptions(now, nil, check.CertificateOptions{ExpiryWarningDays: options.ExpiryWarningDays}).AnalyzeLocal(ctx, certs)
 	}
+	pairs := a.Pair(ctx, keys, certs)
+	code := max(int(local.Failure()), int(pairs.Failure()))
+	remotes := []check.RemoteResult{}
 	for _, item := range inputs {
-		for _, issue := range item.Issues {
-			w.Source(issue.Source)
-			w.Outcome("field.parse", check.Outcome{Status: check.Failed, Code: string(issue.Code), Class: check.ExecutionFailure})
+		if len(item.Issues) > 0 {
 			code = 2
 		}
-		for _, c := range local.Certificates {
-			if len(c.Sources) > 0 && c.Sources[0].InputIndex == item.InputIndex {
-				w.LocalCertificate(c)
-			}
-		}
-		for _, k := range pairs.Keys {
-			if k.Info.Source.InputIndex == item.InputIndex {
-				w.Key(k)
-			}
-		}
 		if item.Target != nil {
-			remote := a.Remote(ctx, *item.Target, now)
-			w.Remote(remote)
-			if int(remote.Failure()) > code {
-				code = int(remote.Failure())
+			var r check.RemoteResult
+			if a.Remote != nil {
+				r = a.Remote(ctx, *item.Target, now)
+			} else {
+				r = check.NewRemoteCheckerWithOptions(now, nil, check.RemoteOptions{Timeout: options.Timeout, ExpiryWarningDays: options.ExpiryWarningDays}).Check(ctx, *item.Target)
 			}
+			remotes = append(remotes, r)
+			code = max(code, int(r.Failure()))
 		}
-	}
-	for _, c := range pairs.Certificates {
-		w.Field("field.fingerprint_sha256", c.FingerprintSHA256)
-		w.Outcome("field.pairing", c.Pairing)
-	}
-	for _, pair := range pairs.Pairs {
-		w.Field("field.pairing", w.T.Text("report.pair", i18n.Params{"Key": fmt.Sprint(pair.KeyIndex), "Certificate": fmt.Sprint(pair.CertificateIndex)}))
-	}
-	w.Outcome("field.pairing", pairs.Pairing)
-	for _, o := range append(local.Issues, pairs.Issues...) {
-		w.Outcome("field.summary", o)
 	}
 	if ctx.Err() != nil {
 		code = 2
-		w.Outcome("field.summary", check.Outcome{Status: check.Failed, Code: "input.canceled", Class: check.ExecutionFailure})
+		local.Issues = append(local.Issues, check.Outcome{Status: check.Failed, Code: "input.canceled", Class: check.ExecutionFailure})
 	}
-	if w.Err != nil {
-		code = 2
+	document := report.Build(cfg.Config.Language, a.Version, a.Commit, now, options.Inputs, inputs, local, pairs, remotes, code)
+	if err := report.Diagnostics(diagnostics, document); err != nil {
+		return 2
 	}
-	w.Summary(code)
-	return finish(code)
+	var buf bytes.Buffer
+	if err := report.Render(&buf, options.Format, document); err != nil {
+		return diagnosticError(diagnostics, t, "cli.output_failed")
+	}
+	if destination != nil {
+		err = destination.Commit(ctx, buf.Bytes())
+	} else {
+		_, err = io.Copy(out, &buf)
+	}
+	if err != nil {
+		return diagnosticError(diagnostics, t, "cli.output_failed")
+	}
+	return code
+}
+
+func (a App) parseInputs(ctx context.Context, specs []model.InputSpec) []model.InputResult {
+	allAuto := true
+	values := make([]string, 0, len(specs))
+	for _, s := range specs {
+		values = append(values, s.Value)
+		if s.Kind != model.AutoInput {
+			allAuto = false
+		}
+	}
+	if allAuto {
+		return a.Parse(ctx, values)
+	}
+	results := make([]model.InputResult, 0, len(specs))
+	p := input.NewParser()
+	for _, s := range specs {
+		results = append(results, p.ParseSpec(ctx, s))
+	}
+	return results
+}
+
+func argumentError(out, diagnostics io.Writer, language string) int {
+	if language != "en" && language != "zh-TW" && language != "zh-CN" {
+		language = "en"
+	}
+	t := i18n.New(language)
+	fmt.Fprintln(diagnostics, t.Text("cli.invalid_arguments", nil))
+	fmt.Fprintln(diagnostics, t.Text("cli.usage_hint", nil))
+	return 2
+}
+func diagnosticError(out io.Writer, t *i18n.Translator, id string) int {
+	fmt.Fprintln(out, t.Text(id, nil))
+	return 2
+}
+func writeHelp(out io.Writer, t *i18n.Translator, settings bool) int {
+	if settings {
+		if _, err := fmt.Fprintln(out, t.Text("cli.settings_help", nil)); err != nil {
+			return 2
+		}
+		return 0
+	}
+	for _, id := range []string{"help.usage", "help.description", "cli.flags_help", "cli.syntax_help", "cli.completion_help"} {
+		if _, err := fmt.Fprintln(out, t.Text(id, nil)); err != nil {
+			return 2
+		}
+	}
+	return 0
 }
 
 // New 組裝既有能力，不新增信任來源或遠端金鑰輸入。
 func New() App {
-	return App{Load: config.NewLoader().Load, Parse: input.NewParser().ParseAll, Local: func(ctx context.Context, c []model.ParsedCertificate, now time.Time) check.LocalResult {
-		return check.NewAnalyzer(now, nil).AnalyzeLocal(ctx, c)
-	}, Pair: check.PairLocal, Remote: func(ctx context.Context, t model.Target, now time.Time) check.RemoteResult {
-		return check.NewRemoteChecker(now, nil).Check(ctx, t)
-	}, Now: time.Now, Version: "development", Commit: "unknown"}
+	return App{Load: config.NewLoader().Load, Parse: input.NewParser().ParseAll, Pair: check.PairLocal, Now: time.Now, Version: "development", Commit: "unknown"}
 }

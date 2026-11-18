@@ -44,7 +44,7 @@ Current evidence separates macOS arm64 native execution from Windows amd64 cross
 
 ## Release preparation and retry boundaries
 
-GitHub Actions workflows and GoReleaser v2.14.3 configuration are implemented. Local snapshot builds and checksum checks passed; hosted workflow execution and publishing have not run. Before a release, confirm tool versions, workflow permissions, real tap/bucket destinations and owners, version injection (`main.version`, `main.commit`), architecture matrix, archive contents, SHA-256 output and both language documents plus LICENSE. The initial target is v0.1.0, not an assertion that this version exists.
+GitHub Actions workflows and GoReleaser v2.14.3 configuration are implemented. Local snapshot builds and checksum checks passed. A previous hosted packages job failed; this PATH fix has not been pushed, so the complete native matrix remains unverified. No publishing has occurred. Before a release, confirm tool versions, workflow permissions, real tap/bucket destinations and owners, version injection (`main.version`, `main.commit`), architecture matrix, archive contents, SHA-256 output and both language documents plus LICENSE. The initial target is v0.1.0, not an assertion that this version exists.
 
 Keep nonpublishing builds separate from tag creation, pushing, GitHub Releases and package-repository writes. Publishing needs explicit authorization. No release command is supplied until its configuration and permissions have been verified.
 
@@ -109,3 +109,15 @@ The publisher enumerates authenticated Release pages to locate both drafts and p
 The shared release concurrency group uses `queue: max` and `cancel-in-progress: false`. GitHub allows up to 100 pending runs; overflow can still be canceled and queue order is not guaranteed to match tag/version order. Version comparisons remain necessary. Actionlint 1.7.12 does not yet recognize this official property. CI uses `scripts/lint_workflows.py` to validate the exact concurrency contract and accept only that precise unknown-field diagnostic at the expected file/line; all other errors remain fatal. Run it with `python3 -B scripts/lint_workflows.py` after installing the pinned Actionlint. Once the tool supports the property, the wrapper still validates the queue contract with no diagnostic exception needed. Hosted queue behavior remains untested locally.
 
 Certificate SAN URIs are displayed individually. Hierarchical URI identity paths, including SPIFFE paths, are preserved; user information, query and fragment are removed. Opaque or invalid URIs are represented by `[URI]` instead of reflecting potentially embedded credentials. General public text and local paths are not guessed to be network URLs; terminal controls are removed.
+
+## CLI compatibility update
+
+See [README](../README.md) for table-default reporting, four formats and protected output, forced local/remote inputs, language overrides, settings and four-shell completion. Ordinary commands still never write configuration; explicit settings save is the exception. Native Windows Console/ACL/commit behavior, interactive Fish and native execution on all four targets need platform evidence. This change does not modify CI or create a release.
+
+The eight CLI review fixes have regression coverage for completion debug writes, empty flag values, shell help, terminal disconnect, ACL preservation/failure cleanup, advice codes, table delimiters, and per-input summaries. macOS ACL handling uses bounded native attribute calls; CLI runtime does not depend on chmod/Python, which are test tools only. Windows DACL native test sources cross-compile; native Windows execution remains unverified.
+
+## CI packaging-tool PATH fix
+
+The pinned action adds its installation directory to later steps only when `install-only: true`. CI now explicitly installs v2.14.3, then runs `goreleaser --version`, `goreleaser check`, and the existing snapshot in shell steps. The action SHA, read-only contents permissions, `--snapshot --skip=publish`, and release.disable remain unchanged. Regression checks cover installation/execution order and nonpublishing behavior; local success does not establish hosted-runner success.
+
+Behavior reference: [pinned action source](https://github.com/goreleaser/goreleaser-action/blob/e435ccd777264be153ace6237001ef4d979d3a7a/src/main.ts).

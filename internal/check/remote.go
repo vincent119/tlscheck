@@ -66,9 +66,20 @@ func (r RemoteResult) Failure() FailureClass {
 	return severity
 }
 
+// RemoteOptions 保留每目標的總期限與提醒門檻。
+type RemoteOptions struct {
+	Timeout           time.Duration
+	ExpiryWarningDays int
+}
+
 // NewRemoteChecker 的 nil provider 使用系統信任，不自動搜尋 client key。
 func NewRemoteChecker(now time.Time, provider RootProvider) *RemoteChecker {
-	return &RemoteChecker{analyzer: NewAnalyzer(now, provider), resolver: &net.Resolver{}, dial: (&net.Dialer{}).DialContext, timeout: RemoteTimeout}
+	return NewRemoteCheckerWithOptions(now, provider, RemoteOptions{Timeout: RemoteTimeout, ExpiryWarningDays: 30})
+}
+
+// NewRemoteCheckerWithOptions 不加入重試或額外網路請求。
+func NewRemoteCheckerWithOptions(now time.Time, provider RootProvider, options RemoteOptions) *RemoteChecker {
+	return &RemoteChecker{analyzer: NewAnalyzerWithOptions(now, provider, CertificateOptions{ExpiryWarningDays: options.ExpiryWarningDays}), resolver: &net.Resolver{}, dial: (&net.Dialer{}).DialContext, timeout: options.Timeout}
 }
 
 // Check 僅檢查一個已正規化目標；每次呼叫都有獨立期限。
@@ -147,7 +158,7 @@ func (c *RemoteChecker) Check(ctx context.Context, target model.Target) (result 
 	closeConnection()
 	result.ServerChain = append([]*x509.Certificate(nil), state.PeerCertificates...)
 	for _, certificate := range result.ServerChain {
-		info, analysisErr := AnalyzeCertificate(certificate, c.analyzer.now)
+		info, analysisErr := AnalyzeCertificateWithOptions(certificate, c.analyzer.now, c.analyzer.options)
 		if analysisErr != nil {
 			result.Issues = append(result.Issues, failed("remote.invalid_certificate", ExecutionFailure))
 			continue

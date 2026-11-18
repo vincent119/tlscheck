@@ -95,3 +95,19 @@ type InputResult struct {
 	Keys         []ParsedKey
 	Issues       []Issue
 }
+
+// InputKind 明確區分自動辨識與使用者指定模式。
+type InputKind string
+
+const (
+	AutoInput   InputKind = "auto"
+	RemoteInput InputKind = "remote"
+	LocalInput  InputKind = "local"
+)
+
+// InputSpec 保留每次出現的順序，不以內容去重。
+type InputSpec struct {
+	Kind  InputKind
+	Value string
+	Index int
+}

@@ -1,4 +1,4 @@
-// Package config 只讀取固定位置的語系設定，不提供覆寫或寫入介面。
+// Package config 保留固定位置的唯讀載入，只有明確編輯儲存才允許寫入。
 package config
 
 import (
@@ -23,6 +23,7 @@ const MaxFileSize = 64 * 1024
 // Config 的欄位只由 JSON 與預設值控制。
 type Config struct {
 	Language string `json:"language" mapstructure:"language"`
+	Theme    string `json:"theme" mapstructure:"theme"`
 }
 
 // Warning 不保存原始設定值、路徑或底層錯誤，不影響檢查結束碼。
@@ -72,6 +73,7 @@ func (l *Loader) Load(ctx context.Context) Result {
 	settings := viper.New()
 	settings.SetConfigType("json")
 	settings.SetDefault("language", "en")
+	settings.SetDefault("theme", "normal")
 	if err := settings.ReadConfig(bytes.NewReader(data)); err != nil {
 		return fallback("config.invalid_json")
 	}
@@ -90,11 +92,18 @@ func (l *Loader) Load(ctx context.Context) Result {
 	if ctx.Err() != nil {
 		return fallback("config.canceled")
 	}
+	if cfg.Theme == "" {
+		cfg.Theme = "normal"
+	}
+	if cfg.Theme != "normal" && cfg.Theme != "dark" && cfg.Theme != "light" {
+		cfg.Theme = "normal"
+		return Result{Config: cfg, Warnings: []Warning{{Code: "config.unsupported_theme"}}}
+	}
 	return Result{Config: cfg}
 }
 
 func fallback(code string) Result {
-	r := Result{Config: Config{Language: "en"}}
+	r := Result{Config: Config{Language: "en", Theme: "normal"}}
 	if code != "" {
 		r.Warnings = []Warning{{Code: code}}
 	}
@@ -146,19 +155,23 @@ func validateJSON(data []byte) string {
 	if err != nil || token != json.Delim('{') {
 		return "config.invalid_json"
 	}
-	seen := false
+	seen := make(map[string]bool)
 	for decoder.More() {
 		token, err = decoder.Token()
 		if err != nil {
 			return "config.invalid_json"
 		}
-		if token != "language" {
+		if token != "language" && token != "theme" {
 			return "config.unknown_field"
 		}
-		if seen {
+		key, ok := token.(string)
+		if !ok {
+			return "config.invalid_json"
+		}
+		if seen[key] {
 			return "config.duplicate_field"
 		}
-		seen = true
+		seen[key] = true
 		var raw json.RawMessage
 		if err := decoder.Decode(&raw); err != nil {
 			return "config.invalid_json"

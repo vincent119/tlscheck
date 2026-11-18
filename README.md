@@ -24,7 +24,7 @@ go build -o bin/tlscheck.exe ./cmd/tlscheck
 .\bin\tlscheck.exe --version
 ```
 
-No arguments prints help and exits with 0. An unmodified development build reports version `development` and source commit `unknown`. Use `--version` alone; unknown flags, including `--help` and `--language`, or mixing `--version` with targets returns 2. Prefix a local filename beginning with `-` with `./` or `.\`.
+No arguments prints help and exits with 0. An unmodified development build reports version `development` and source commit `unknown`. Use `--help`/`-h` for help and `--version`/`-V` for version information; either can accompany `--language`/`-L`, but cannot mix with check targets or execution flags. Unknown flags and invalid combinations return 2. Prefix local filenames beginning with `-` with `./` or `.\`, or place them after `--`.
 
 Source builds are available. Four-target local snapshot packaging and macOS arm64 manual archive installation are validated. Published release archives, Homebrew/Scoop installation, signing, notarization, and Windows native execution remain unverified. See [installation and release maintenance](docs/releasing.md) for pending package information and verification boundaries.
 
@@ -71,23 +71,81 @@ HTTPS URLs must use standard `https://`; the default port is 443 and explicit po
 
 Multiple PEM blocks are accepted. Valid objects are retained when another block is damaged or unsupported; the final exit code is 2. Encrypted private keys are unsupported, are not decrypted, and do not trigger a password prompt. PKCS#12/PFX and other key algorithms are not supported.
 
+## Complete options and output
+
+| Option | Short | Default / purpose |
+|---|---|---|
+| `[target-or-file]...` | | Auto-detect; existing files take precedence |
+| `--remote TARGET` | `-r` | Force remote; repeatable; never reads a same-named local file |
+| `--local PATH` | `-l` | Force local; repeatable; missing files never become remote targets |
+| `--language CODE` | `-L` | One-run en / zh-TW / zh-CN override |
+| `--format FORMAT` | `-f` | table (default) / json / html / markdown |
+| `--output PATH` | `-o` | `-` (stdout) |
+| `--overwrite` | | Off; requires output other than `-` |
+| `--timeout DURATION` | `-t` | 10s; 1ms–5m |
+| `--expiry-warning-days DAYS` | | 30; 0–36500; 0 disables warnings |
+| `--settings` | `-s` | Independent interactive language/theme settings |
+| `--help` | `-h` | Help, exit 0 |
+| `--version` | `-V` | Version, exit 0 |
+| `--` | | All following tokens are positional inputs |
+
+Positional, remote and local inputs retain command-line occurrence order and duplicates. Each remote/local flag takes one value without splitting commas. Other flags cannot repeat; valueless boolean flags cannot use forms such as `--overwrite=true`. Required values cannot be omitted or empty, including `--remote=`/`--local=`; these errors never create a report. Settings cannot mix with check or language flags; `--settings --help` works without opening the menu. A language override alone shows help; execution flags without a target return 2.
+
+```sh
+./bin/tlscheck -r example.com --local ./local/site.pem -L zh-TW
+./bin/tlscheck 'https://example.com:8443/' -t 5s --expiry-warning-days 14
+./bin/tlscheck -l ./local/site.pem -f json -o ./report.json
+./bin/tlscheck -l ./local/site.pem -f html -o ./report.html --overwrite
+./bin/tlscheck -l ./local/site.pem -f markdown
+./bin/tlscheck --settings
+```
+
+Format is never inferred from the extension. The output parent must already exist; `~` is not expanded. Existing destinations require `--overwrite`. Directories, special files, symlinks, and destinations aliasing inputs/configuration through identity or hardlinks are rejected. Reports serialize completely before temporary-file writing, syncing, closing and committing. Output errors return 2. JSON `summary.check_exit_code` describes checks only; the process may additionally return 2 for I/O failures. New macOS reports use 0600 without inherited ACLs; overwrites preserve native ACLs, owner and group. Writes fail safely if security attributes cannot be preserved or ACL restrictions would prevent commit/failure cleanup. Windows uses protected DACLs and checks existing security attributes; native Windows ACL/commit behavior still needs Windows execution. Detected destination snapshot changes stop the write; the final snapshot check and rename are not a compare-and-swap guarantee against arbitrary external processes.
+
+JSON is one UTF-8 object with two-space indentation and a final newline, using integer `schema_version: 1`. Root fields are `tool`, `generated_at` (UTC), `language`, ordered `inputs`, `local`, `remote`, and `summary`. Status values remain `passed`/`failed`/`not_performed`, and severities `none`/`verification`/`execution`. Codes are stable and messages localized; empty collections are `[]`, unobserved TLS is `null`. `advice` is `null` or `{ "code": "advice.…", "message": "…" }`, with language-independent codes. Table/HTML/Markdown include per-input results and highest severity, plus a key-ID/certificate-ID pair table; derived views do not increment global counts. Table displays backslashes as `\\` and pipes as `\u007c`; other formats keep their own safe representation. Certificates use full SHA-256 IDs; private keys expose only per-source IDs and public metadata. Private-key material and original full URLs never enter the report. HTML is standalone, loads no external resources, executes no JavaScript, and never opens a browser automatically.
+
+## Shell completion
+
+`completion` is a reserved helper command. Use `-r completion` or `-- completion` for that hostname, or `-l completion` for that filename. `completion SHELL --help`/`-h` shows shell-level help. Hidden completion never echoes raw errors; generated debug functions do not write files, and `BASH_COMP_DEBUG_FILE` does not enable writing. Completion never connects or reads configuration/certificate contents; filename completion may enumerate directories. Bash requires a compatible bash-completion package to be loaded, providing `_get_comp_words_by_ref`/`_init_completion`; sourcing the generated script alone does not supply this shell dependency. This machine lacks that package, so Bash evidence covers syntax and protocol only.
+
+All four shells accept `--no-descriptions` and `-L`/`--language`, but no execution flags.
+
+```sh
+# Bash
+source <(./bin/tlscheck completion bash)
+# Zsh
+source <(./bin/tlscheck completion zsh)
+# Fish
+./bin/tlscheck completion fish | source
+# Generate without descriptions
+./bin/tlscheck completion zsh --no-descriptions
+```
+
+PowerShell:
+
+```powershell
+.\bin\tlscheck.exe completion powershell | Out-String | Invoke-Expression
+```
+
+These activate completion in the current shell; add the applicable command to your own startup file for persistence. Script generation and available local-shell syntax validation do not establish native Windows/Fish interactive success.
+
 ## Language configuration
 
-Only `language` in `config.json` selects the UI language. There are no language flags or language environment-variable overrides, and the working directory is not searched. The platform configuration directory itself is resolved by `os.UserConfigDir()`.
+Use `--language en|zh-TW|zh-CN`/`-L` for a one-run override, ahead of JSON and default English. A valid CLI language bypasses configuration reads and is never saved. There are no language environment-variable or configuration-path overrides. The platform directory is resolved by `os.UserConfigDir()`.
 
 | Platform | Configuration file |
 |---|---|
 | macOS | `~/Library/Application Support/tlscheck/config.json` |
 | Windows | `%AppData%\tlscheck\config.json` |
 
-The application never creates, modifies or deletes this file. To choose a language, manually create the directory and file in an editor. Save UTF-8 without BOM and select one of these complete JSON objects:
+Run `tlscheck --settings`/`-s` for interactive language and theme settings. Both stdin and stderr must be terminals; the menu uses stderr and leaves stdout empty. Use arrows, Enter, Esc (back/cancel), Ctrl+C (cancel), or `t` (theme). A macOS terminal disconnect exits without saving. Only **Save and exit** writes configuration; cancel leaves it unchanged. Repair malformed or unknown-field configurations manually before saving. Themes `normal`, `dark`, and `light` affect only the menu. Alternatively create UTF-8 JSON without BOM:
 
 ```json
 {"language":"en"}
 ```
 
 ```json
-{"language":"zh-TW"}
+{"language":"zh-TW","theme":"normal"}
 ```
 
 ```json
@@ -102,6 +160,10 @@ The application never creates, modifies or deletes this file. To choose a langua
 | Invalid JSON/UTF-8, nonobject root, trailing data | English warning and fallback |
 | Nonstring value, including `null`, unknown/duplicate key | English warning and fallback |
 | Any value other than exact `en`, `zh-TW`, `zh-CN` or empty string | English warning and fallback |
+
+Missing or empty theme uses normal; an unsupported theme warns and falls back to normal. Ordinary checks, queries and completion never write configuration.
+
+Table/HTML/Markdown localize input modes, severities, check names, stages, and URI redaction reasons. JSON identifiers, stored settings, certificate values, and paths remain unchanged. Language options retain their native names; theme options use localized labels. If both local and English templates fail, the final safe message follows the effective language; unsupported languages use English and internal message IDs are never echoed.
 
 Configuration warnings go to stderr and do not alone change the exit code. Missing translations fall back to English. Hostnames, paths, algorithms and public certificate values retain their original text; unsafe terminal controls and URL additions are removed for display.
 
@@ -121,17 +183,17 @@ RSA uses standard validity checks. ECDSA checks scalar range, curve membership a
 
 | Exit code | Meaning |
 |---|---|
-| 0 | Applicable checks passed, help/version succeeded, or only expiry/configuration warnings |
+| 0 | Applicable checks passed, help/version/completion succeeded, settings saved/cancelled, or only expiry/configuration warnings |
 | 1 | Certificate/key/trust/pairing check failure |
 | 2 | Input, parsing, unsupported format, connection, timeout, cancellation or output error |
 
 The highest severity wins: 2 > 1 > 0. Individual input failures do not stop remaining inputs; invalid CLI flag combinations are rejected before checking. States are passed, failed and not performed. Not performed is neither a pass nor an independent failure. Summary counts describe the displayed checks, not the number of input files.
 
-Full reports and verification failures go to stdout. Configuration warnings and execution diagnostics go to stderr; an execution error can appear in both the report and the diagnostic stream.
+Table reports and verification failures go to stdout by default. With `--output PATH`, the full report goes only to that file, with no saved banner on stdout. Configuration warnings and execution diagnostics go to stderr; an execution error can appear in both the report and the diagnostic stream.
 
-Each local certificate/key file is limited to 10 MiB of actual reads. Each remote target has a shared 10-second DNS/TCP/TLS handshake deadline, not a separate 10 seconds per stage. Platform trust operations can have platform-specific cancellation limits. Dates use UTC; remaining days are floored, so a recently expired certificate can show -1 day. A nonexpired certificate expiring within 30 × 24 hours produces a warning; that warning alone does not change the exit code.
+Each local certificate/key file is limited to 10 MiB of actual reads. Each remote target has a shared DNS/TCP/TLS handshake deadline, default 10 seconds and configurable with `--timeout`/`-t` from 1ms to 5m, not a separate 10 seconds per stage. Platform trust operations can have platform-specific cancellation limits. Dates use UTC; remaining days are floored, so a recently expired certificate can show -1 day. A nonexpired certificate expiring within 30 × 24 hours produces a warning by default; `--expiry-warning-days` accepts 0–36500, where 0 disables warnings but preserves expiry validation; that warning alone does not change the exit code.
 
-Output is plain text without color or animation. tlscheck does not request, renew or deploy certificates, inspect web content, scan cipher suites, decrypt keys, or manage system trust. Planned initial release artifacts are unsigned and unnotarized; no signed/notarized distribution is currently verified.
+Reports support table, JSON, standalone offline HTML, and GFM Markdown without terminal color or animation. tlscheck does not request, renew or deploy certificates, inspect web content, scan cipher suites, decrypt keys, or manage system trust. Planned initial release artifacts are unsigned and unnotarized; no signed/notarized distribution is currently verified.
 
 ## Development and maintenance
 

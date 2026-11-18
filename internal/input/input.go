@@ -142,3 +142,74 @@ func (r contextReader) Read(data []byte) (int, error) {
 func addIssue(result *model.InputResult, code model.IssueCode, source model.SourceRef) {
 	result.Issues = append(result.Issues, model.Issue{Code: code, Source: source})
 }
+
+// ParseSpec 的強制模式不會跨到另一個 I/O 邊界。
+func (p *Parser) ParseSpec(ctx context.Context, spec model.InputSpec) model.InputResult {
+	if spec.Kind == model.AutoInput {
+		return p.Parse(ctx, spec.Value, spec.Index)
+	}
+	r := model.InputResult{InputIndex: spec.Index}
+	source := model.SourceRef{InputIndex: spec.Index}
+	if ctx.Err() != nil {
+		addIssue(&r, model.Canceled, source)
+		return r
+	}
+	if spec.Kind == model.RemoteInput {
+		var err error
+		r.Target, err = parseTarget(spec.Value, spec.Index)
+		if err != nil {
+			addIssue(&r, targetIssue(err), source)
+		}
+		return r
+	}
+	if spec.Kind != model.LocalInput {
+		addIssue(&r, model.InvalidData, source)
+		return r
+	}
+	source.Path = spec.Value
+	info, err := p.stat(spec.Value)
+	if err != nil {
+		code := model.FileUnreadable
+		if errors.Is(err, fs.ErrNotExist) {
+			code = model.FileNotFound
+		}
+		addIssue(&r, code, source)
+		return r
+	}
+	if !info.Mode().IsRegular() {
+		addIssue(&r, model.NotRegularFile, source)
+		return r
+	}
+	p.readFile(ctx, spec.Value, source, &r)
+	return r
+}
+
+// LocalPaths 只定位報告不得取代的檔名，不讀內容或建立連線。
+func (p *Parser) LocalPaths(ctx context.Context, specs []model.InputSpec) []string {
+	paths := []string{}
+	for _, spec := range specs {
+		if ctx.Err() != nil {
+			return paths
+		}
+		if spec.Kind == model.RemoteInput {
+			continue
+		}
+		if spec.Kind == model.LocalInput {
+			paths = append(paths, spec.Value)
+			continue
+		}
+		_, err := p.stat(spec.Value)
+		if err == nil {
+			paths = append(paths, spec.Value)
+			continue
+		}
+		// URL 在 Windows 可因非法檔名回傳錯誤；必須與 Parse 的 URL 分支順序一致。
+		if strings.Contains(spec.Value, "://") || strings.HasPrefix(strings.ToLower(spec.Value), "https:") || strings.HasPrefix(strings.ToLower(spec.Value), "http:") {
+			continue
+		}
+		if explicitPath(spec.Value) || !errors.Is(err, fs.ErrNotExist) && !isNameTooLong(err) {
+			paths = append(paths, spec.Value)
+		}
+	}
+	return paths
+}

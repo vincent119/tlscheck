@@ -147,7 +147,7 @@ func TestCatalogCompletenessAndTemplateParameters(t *testing.T) {
 				params[field] = "合成值-" + field
 			}
 			output := tr.Text(id, params)
-			if output == "" || output == unavailableMessage || strings.Contains(output, "<no value>") {
+			if output == "" || output == unavailableMessage || output == tr.fallback || strings.Contains(output, "<no value>") {
 				t.Fatalf("%s %s 無法渲染", language, id)
 			}
 			for _, value := range params {
@@ -156,6 +156,10 @@ func TestCatalogCompletenessAndTemplateParameters(t *testing.T) {
 				}
 			}
 			if language != "en" && strings.Contains(id, ".") && strings.HasPrefix(id, "config.") {
+				continue
+			}
+			// 母語選項名稱跨語系保持原名，只允許這個固定鍵保留 English。
+			if id == "language.name.en" && message == "English" {
 				continue
 			}
 			if language != "en" && id != "report.value" && id != "report.field" && id != "report.outcome" {

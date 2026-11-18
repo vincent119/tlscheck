@@ -16,6 +16,7 @@ type Analyzer struct {
 	now         time.Time
 	roots       RootProvider
 	systemRoots bool
+	options     CertificateOptions
 }
 
 // LocalResult 保留每張獨立憑證及無法歸屬單張憑證的執行錯誤。
@@ -45,7 +46,12 @@ func (r LocalResult) Failure() FailureClass {
 
 // NewAnalyzer 的 nil provider 表示真正系統根；now 由呼叫者固定。
 func NewAnalyzer(now time.Time, provider RootProvider) *Analyzer {
-	return &Analyzer{now: now, roots: provider, systemRoots: provider == nil}
+	return NewAnalyzerWithOptions(now, provider, CertificateOptions{ExpiryWarningDays: 30})
+}
+
+// NewAnalyzerWithOptions 保持原系統信任語意，僅帶入提醒門檻。
+func NewAnalyzerWithOptions(now time.Time, provider RootProvider, options CertificateOptions) *Analyzer {
+	return &Analyzer{now: now, roots: provider, systemRoots: provider == nil, options: options}
 }
 
 // AnalyzeLocal 接收已解析憑證，系統 CA 驗證只允許已核准的平台唯讀例外。
@@ -71,7 +77,7 @@ func (a *Analyzer) AnalyzeLocal(ctx context.Context, certs []model.ParsedCertifi
 			return result
 		}
 		cert := parsed.Certificate
-		info, err := AnalyzeCertificate(cert, a.now)
+		info, err := AnalyzeCertificateWithOptions(cert, a.now, a.options)
 		if err != nil {
 			result.Issues = append(result.Issues, failed("certificate.invalid_input", ExecutionFailure))
 			continue
