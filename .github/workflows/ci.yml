@@ -1,0 +1,76 @@
+name: 跨平台檢查
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  native:
+    needs: packages
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+      - name: 格式、靜態檢查與原生測試
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+          go test ./...
+          go test -race ./...
+          git diff --check
+          python3 -B -m unittest discover -s scripts -v
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: snapshot-archives
+          path: dist
+      - name: 隔離原生壓縮檔安裝與設定保留
+        run: python3 -B scripts/install_check.py
+      - name: 原生 CLI
+        run: |
+          go build -o native-tlscheck.exe ./cmd/tlscheck
+          ./native-tlscheck.exe --version
+  packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          version: v2.14.3
+          args: check
+      - name: Workflow 語法檢查
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          python3 -B scripts/lint_workflows.py
+      - name: 四目標無發佈試建置
+        run: |
+          goreleaser release --snapshot --clean --skip=publish
+          python3 scripts/release.py verify
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: snapshot-archives
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          retention-days: 7

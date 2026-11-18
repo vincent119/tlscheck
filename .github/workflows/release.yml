@@ -1,0 +1,48 @@
+name: 分階段發佈
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tlscheck-stable-release
+  cancel-in-progress: false
+  queue: max
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v') && vars.ENABLE_RELEASE == 'true'
+    needs: checks
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      RELEASE_APPROVED: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          version: v2.14.3
+          args: release --clean --skip=publish
+      - name: 驗證、上傳及核對 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/release.py verify
+          python3 scripts/release.py publish --tag "$RELEASE_TAG" --execute
+      - name: 成功發佈後更新穩定套件
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+        run: python3 scripts/release.py update --tag "$RELEASE_TAG" --execute

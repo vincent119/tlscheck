@@ -1,0 +1,42 @@
+version: 2
+project_name: tlscheck
+builds:
+  - id: tlscheck
+    main: ./cmd/tlscheck
+    binary: tlscheck
+    env: [CGO_ENABLED=0]
+    goos: [darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath, -buildvcs=false]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.FullCommit}}
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    builds_info:
+      mtime: '{{ .CommitDate }}'
+    files:
+      - src: LICENSE
+        info: {mtime: '{{ .CommitDate }}'}
+      - src: README.md
+        info: {mtime: '{{ .CommitDate }}'}
+      - src: README.zh-TW.md
+        info: {mtime: '{{ .CommitDate }}'}
+      - src: docs/releasing.md
+        info: {mtime: '{{ .CommitDate }}'}
+      - src: docs/releasing.zh-TW.md
+        info: {mtime: '{{ .CommitDate }}'}
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+snapshot:
+  version_template: '0.0.0-snapshot-{{ .ShortCommit }}-dirty'
+changelog:
+  disable: true
+release:
+  disable: true
