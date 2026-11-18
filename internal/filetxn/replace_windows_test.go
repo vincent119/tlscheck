@@ -32,9 +32,19 @@ func TestWindowsReadonlyOverwritePreservesSecurity(t *testing.T) {
 	if err := os.Chmod(path, 0400); err != nil {
 		t.Fatal(err)
 	}
-	old, err := os.Open(path)
+	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// 成功案例必須分享刪除權限，否則保留的舊 handle 會自行阻擋替換。
+	handle, err := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.NewFile(uintptr(handle), path)
+	if old == nil {
+		windows.CloseHandle(handle)
+		t.Fatal("無法接管舊檔案 handle")
 	}
 	defer old.Close()
 	before, err := readSecurity(old)
