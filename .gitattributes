@@ -1,0 +1,18 @@
+# 統一文字換行，避免跨平台 checkout 產生無關差異。
+* text=auto
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+Makefile text eol=lf
+LICENSE text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.editorconfig text eol=lf
+
+# DER 資料不可進行文字換行轉換。
+*.der binary

@@ -1,0 +1,31 @@
+# 作業系統與編輯器產物不屬於原始碼。
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go 建置、測試與發佈產物。
+/bin/
+/dist/
+/tlscheck
+/tlscheck.exe
+*.exe
+*.test
+*.out
+/coverage/
+/coverage.txt
+/coverage.html
+
+# 保留 go.mod、go.sum 與測試 fixture 的追蹤能力。
+# 真實憑證與私鑰應放在此目錄，避免以副檔名忽略測試資料。
+/local/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+
+# 私有規格由外部 workspace 管理。
+/.specs/
