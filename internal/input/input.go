@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"net/netip"
 	"os"
 	"strings"
 
@@ -53,7 +54,7 @@ func (p *Parser) Parse(ctx context.Context, value string, index int) model.Input
 	}
 	// 合法 Unicode 網域的 UTF-8 可能超過檔名長度，但 IDNA 後仍是合法目標。
 	nameTooLongTarget := isNameTooLong(err) && !explicitPath(value)
-	if !errors.Is(err, fs.ErrNotExist) && !nameTooLongTarget {
+	if !errors.Is(err, fs.ErrNotExist) && !nameTooLongTarget && !ipAfterPathError(value, err) {
 		addIssue(&result, model.FileUnreadable, model.SourceRef{InputIndex: index})
 		return result
 	}
@@ -66,6 +67,19 @@ func (p *Parser) Parse(ctx context.Context, value string, index int) model.Input
 		addIssue(&result, targetIssue(err), model.SourceRef{InputIndex: index})
 	}
 	return result
+}
+
+func ipAfterPathError(value string, err error) bool {
+	if !isInvalidName(err) || explicitPath(value) {
+		return false
+	}
+	// Windows 的冒號檔名限制不代表 IP 無效；只容許已完整驗證的 IP，保留其他 I/O 錯誤。
+	target, parseErr := parseTarget(value, 0)
+	if parseErr != nil {
+		return false
+	}
+	_, parseErr = netip.ParseAddr(target.ASCIIHost)
+	return parseErr == nil
 }
 
 // ParseAll 只依輸入順序分類；一項失敗不會停止其他項目。
@@ -205,6 +219,9 @@ func (p *Parser) LocalPaths(ctx context.Context, specs []model.InputSpec) []stri
 		}
 		// URL 在 Windows 可因非法檔名回傳錯誤；必須與 Parse 的 URL 分支順序一致。
 		if strings.Contains(spec.Value, "://") || strings.HasPrefix(strings.ToLower(spec.Value), "https:") || strings.HasPrefix(strings.ToLower(spec.Value), "http:") {
+			continue
+		}
+		if ipAfterPathError(spec.Value, err) {
 			continue
 		}
 		if explicitPath(spec.Value) || !errors.Is(err, fs.ErrNotExist) && !isNameTooLong(err) {

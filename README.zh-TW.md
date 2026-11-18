@@ -100,7 +100,7 @@ HTTPS URL 必須使用標準 `https://`；預設連接埠為 443，明確指定�
 ./bin/tlscheck --settings
 ```
 
-報告格式不依副檔名猜測。output 父目錄必須已存在；不展開 `~`。預設不覆蓋既有檔案；拒絕目錄、特殊檔案、symlink，以及與輸入／設定同檔或 hardlink 的目的地。完整序列化、暫存寫入、同步與關閉成功後才提交；若輸出失敗，程序回傳 2。JSON 的 `summary.check_exit_code` 只描述檢查結果，程序另可能因 I/O 失敗回傳 2。macOS 新報告檔使用 0600 並移除繼承 ACL；覆寫時保存原生 ACL、擁有者及群組。若安全屬性無法可靠保存，或 ACL 會妨礙提交／失敗清理，會拒絕覆寫並保留原檔。Windows 使用受保護 DACL 並檢查既有安全屬性，原生 ACL／提交語意仍需 Windows 實測。檢查到目的地快照變更即停止；快照與重新命名之間不具有對任意外部程序的 compare-and-swap 保證。
+報告格式不依副檔名猜測。output 父目錄必須已存在；不展開 `~`。預設不覆蓋既有檔案；拒絕目錄、特殊檔案、symlink，以及與輸入／設定同檔或 hardlink 的目的地。完整序列化、暫存寫入、同步與關閉成功後才提交；若輸出失敗，程序回傳 2。JSON 的 `summary.check_exit_code` 只描述檢查結果，程序另可能因 I/O 失敗回傳 2。macOS 新報告檔使用 0600 並移除繼承 ACL；覆寫時保存原生 ACL、擁有者及群組。若安全屬性無法可靠保存，或 ACL 會妨礙提交／失敗清理，會拒絕覆寫並保留原檔。Windows 使用受保護 DACL 並檢查既有安全屬性；唯讀目的檔透過相對既有目錄 handle 的原子替換保存唯讀屬性與 DACL，不先移除原檔或清除其唯讀屬性。不支援此操作的 Windows／檔案系統會安全失敗；此項修正仍待 Windows 原生測試。檢查到目的地快照變更即停止；快照與重新命名之間不具有對任意外部程序的 compare-and-swap 保證。
 
 JSON 為單一 UTF-8 物件、兩空格縮排及檔尾換行，固定 `schema_version: 1`。頂層包含 `tool`、`generated_at`（UTC）、`language`、依序 `inputs`、`local`、`remote` 與 `summary`。狀態固定為 `passed`／`failed`／`not_performed`；嚴重度為 `none`／`verification`／`execution`。代碼固定、說明依語系翻譯，空集合為 `[]`，未觀測 TLS 為 `null`。`advice` 為 `null` 或 `{ "code": "advice.…", "message": "…" }`，代碼不隨語系變更。table／HTML／Markdown 另有逐輸入結果與最高嚴重度摘要，以及 key ID／certificate ID 配對表；全域計數不因衍生視圖重複累計。table 將反斜線顯示為 `\\`、pipe 顯示為 `\u007c`，其他格式保留各自安全文字。憑證以完整 SHA-256 指紋識別，私鑰僅含逐來源識別碼與公開資訊；不輸出私鑰內容或原始完整 URL。HTML 不載入外部資源、不執行 JavaScript，也不自動開瀏覽器。
 

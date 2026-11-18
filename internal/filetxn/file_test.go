@@ -75,6 +75,10 @@ func TestCommitIsAtomicAndPreservesMode(t *testing.T) {
 	if err := os.Chmod(path, 0400); err != nil {
 		t.Fatal(err)
 	}
+	before, err := os.Stat(path)
+	if err != nil || before.Mode().Perm()&0222 != 0 {
+		t.Fatalf("未建立唯讀目的檔：%v，%v", before, err)
+	}
 	tx, err = Prepare(context.Background(), path, true, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +92,8 @@ func TestCommitIsAtomicAndPreservesMode(t *testing.T) {
 		t.Fatal(string(data), err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0400 {
+	// Windows 以唯讀屬性呈現 0444；比較實際快照才能驗證各平台權限保存。
+	if err != nil || info.Mode().Perm() != before.Mode().Perm() {
 		t.Fatal(info, err)
 	}
 	entries, err := os.ReadDir(filepath.Dir(path))

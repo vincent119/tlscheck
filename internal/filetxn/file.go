@@ -236,7 +236,7 @@ func (t *Transaction) Commit(ctx context.Context, data []byte) error {
 	if !t.overwrite || t.original == nil {
 		return t.root.Link(name, t.base)
 	}
-	return t.root.Rename(name, t.base)
+	return t.replace(name)
 }
 
 // Close 釋放目錄 handle，不刪除原始目的地。
