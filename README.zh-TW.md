@@ -6,7 +6,7 @@ tlscheck 是 Go CLI，用於診斷遠端 TLS 憑證、檢查本機憑證與私�
 
 ## 建置與開始使用
 
-需要 Go 1.27.0 以上版本。目前開發驗證環境為 Go 1.27.4、macOS arm64。以下指令從 repository 根目錄執行；GNU Make 為選用工具。
+需要 Go 1.27.0 以上版本。Go 1.27.4 已在 macOS arm64／amd64 與 Windows amd64 的 CI 驗證。以下指令從 repository 根目錄執行；GNU Make 為選用工具。
 
 macOS：
 
@@ -26,7 +26,7 @@ go build -o bin/tlscheck.exe ./cmd/tlscheck
 
 不帶參數會顯示說明並回傳 0。未修改的開發建置顯示版本 `development`、來源 commit `unknown`。`--help`／`-h` 顯示說明，`--version`／`-V` 顯示版本；可搭配 `--language`／`-L`，不得混用檢查目標或一般檢查旗標。未知旗標與無效組合回傳 2。本機檔名若以 `-` 開頭，可加上 `./`、`.\` 路徑前綴，或放在 `--` 後。
 
-目前可從原始碼建置。已驗證四目標本機 snapshot 封裝及 macOS arm64 手動壓縮檔安裝；正式 Release、Homebrew／Scoop 安裝、簽章、公證與 Windows 原生執行尚未驗證。套件待確認資料與驗證邊界見[安裝與發佈維護](docs/releasing.zh-TW.md)。
+目前可從原始碼建置。2026-11-18 的[跨平台 CI](https://github.com/vincent119/tlscheck/actions/runs/44285001106)（來源 `a1cff07`）已通過四目標 snapshot 封裝與校驗，以及 macOS arm64／amd64、Windows amd64 的原生測試、隔離壓縮檔安裝／同版本重裝及設定保留檢查。Windows arm64 僅交叉建置。正式 Release、Homebrew／Scoop 安裝升級、簽章與公證尚未驗證；真實 Console 與完整 shell 補全互動仍待驗收。驗證紀錄與限制見[安裝與發佈維護](docs/releasing.zh-TW.md)。
 
 ## 檢查目標與檔案
 
@@ -100,7 +100,7 @@ HTTPS URL 必須使用標準 `https://`；預設連接埠為 443，明確指定�
 ./bin/tlscheck --settings
 ```
 
-報告格式不依副檔名猜測。output 父目錄必須已存在；不展開 `~`。預設不覆蓋既有檔案；拒絕目錄、特殊檔案、symlink，以及與輸入／設定同檔或 hardlink 的目的地。完整序列化、暫存寫入、同步與關閉成功後才提交；若輸出失敗，程序回傳 2。JSON 的 `summary.check_exit_code` 只描述檢查結果，程序另可能因 I/O 失敗回傳 2。macOS 新報告檔使用 0600 並移除繼承 ACL；覆寫時保存原生 ACL、擁有者及群組。若安全屬性無法可靠保存，或 ACL 會妨礙提交／失敗清理，會拒絕覆寫並保留原檔。Windows 使用受保護 DACL 並檢查既有安全屬性；唯讀目的檔透過相對既有目錄 handle 的原子替換保存唯讀屬性與 DACL，不先移除原檔或清除其唯讀屬性。不支援此操作的 Windows／檔案系統會安全失敗；此項修正仍待 Windows 原生測試。檢查到目的地快照變更即停止；快照與重新命名之間不具有對任意外部程序的 compare-and-swap 保證。
+報告格式不依副檔名猜測。output 父目錄必須已存在；不展開 `~`。預設不覆蓋既有檔案；拒絕目錄、特殊檔案、symlink，以及與輸入／設定同檔或 hardlink 的目的地。完整序列化、暫存寫入、同步與關閉成功後才提交；若輸出失敗，程序回傳 2。JSON 的 `summary.check_exit_code` 只描述檢查結果，程序另可能因 I/O 失敗回傳 2。macOS 新報告檔使用 0600 並移除繼承 ACL；覆寫時保存原生 ACL、擁有者及群組。若安全屬性無法可靠保存，或 ACL 會妨礙提交／失敗清理，會拒絕覆寫並保留原檔。Windows 使用受保護 DACL 並檢查既有安全屬性；唯讀目的檔透過相對既有目錄 handle 的原子替換保存唯讀屬性與 DACL，不先移除原檔或清除其唯讀屬性。不支援此操作的 Windows／檔案系統會安全失敗；唯讀替換、DACL 保存與失敗清理已通過 Windows amd64 CI 回歸。檢查到目的地快照變更即停止；快照與重新命名之間不具有對任意外部程序的 compare-and-swap 保證。
 
 JSON 為單一 UTF-8 物件、兩空格縮排及檔尾換行，固定 `schema_version: 1`。頂層包含 `tool`、`generated_at`（UTC）、`language`、依序 `inputs`、`local`、`remote` 與 `summary`。狀態固定為 `passed`／`failed`／`not_performed`；嚴重度為 `none`／`verification`／`execution`。代碼固定、說明依語系翻譯，空集合為 `[]`，未觀測 TLS 為 `null`。`advice` 為 `null` 或 `{ "code": "advice.…", "message": "…" }`，代碼不隨語系變更。table／HTML／Markdown 另有逐輸入結果與最高嚴重度摘要，以及 key ID／certificate ID 配對表；全域計數不因衍生視圖重複累計。table 將反斜線顯示為 `\\`、pipe 顯示為 `\u007c`，其他格式保留各自安全文字。憑證以完整 SHA-256 指紋識別，私鑰僅含逐來源識別碼與公開資訊；不輸出私鑰內容或原始完整 URL。HTML 不載入外部資源、不執行 JavaScript，也不自動開瀏覽器。
 
@@ -206,7 +206,7 @@ go vet ./...
 git diff --check
 ```
 
-race 偵測需要支援的原生 Go 與 C 工具鏈。測試使用合成憑證與 loopback TLS 服務，不依賴公開服務，也不將根加入系統。Windows 原生測試與安裝尚未驗證；已驗證 macOS arm64 原生執行及 Windows amd64 交叉建置，交叉建置不等於 Windows 執行測試。
+race 偵測需要支援的原生 Go 與 C 工具鏈。測試使用合成憑證與 loopback TLS 服務，不依賴公開服務，也不將根加入系統。macOS arm64／amd64 與 Windows amd64 已通過原生 Go 測試、race、vet、Python 回歸、隔離壓縮檔安裝／同版本重裝及 CLI 版本檢查。四目標 snapshot 均已建置與核對；Windows arm64 僅交叉建置，真實 Console、完整 shell 補全與套件管理器安裝升級仍待驗收。
 
 選用 GNU Make 指令包含 `make help`、`make build`、`make test`、`make vet`、`make check`、`make fmt`。`make build` 產生 `bin/tlscheck`；Windows 請使用前述明確的 PowerShell 建置指令取得 `.exe` 副檔名。建置產物放 `bin/`、發佈產物放 `dist/`，私有本機檔案放已忽略的 `local/`。不全面忽略憑證／私鑰副檔名，以保留刻意建立的合成 fixture。
 

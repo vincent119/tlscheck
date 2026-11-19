@@ -2,13 +2,13 @@
 
 [English](releasing.md) | [繁體中文](releasing.zh-TW.md) | [README](../README.zh-TW.md)
 
-本文件供準備 macOS、Windows 發佈的維護者，以及評估安裝方式的使用者閱讀。目前 CLI 可從原始碼建置；本機 snapshot 封裝已驗證；遠端 workflow 執行、可下載正式版本與套件管理器安裝尚未驗證。以下模板不代表套件已存在。
+本文件供準備 macOS、Windows 發佈的維護者，以及評估安裝方式的使用者閱讀。目前 CLI 可從原始碼建置。2026-11-18 的[跨平台 CI](https://github.com/vincent119/tlscheck/actions/runs/44285001106)（來源 `a1cff07676d94c4ac7e663bec5ea83c8584d42a9`、第 1 次執行）全部通過：四目標 snapshot 封裝與校驗，以及 macOS arm64／amd64、Windows amd64 的原生測試與隔離安裝／同版本重裝。Windows arm64 僅交叉建置；正式 Release、套件管理器安裝升級與實機互動仍待驗證。以下模板不代表套件已存在。
 
 ## 可用的安裝與升級方式
 
-使用 [README](../README.zh-TW.md) 的原始碼建置指令。升級本機建置時，先保留舊執行檔，再建置已審核的來源版本、檢查 `--version`，驗證後替換執行檔。設定檔位於 repository 之外，應用程式不改寫設定。還原舊執行檔即可回滾執行檔，沒有資料庫 migration。
+使用 [README](../README.zh-TW.md) 的原始碼建置指令。升級本機建置時，先保留舊執行檔，再建置已審核的來源版本、檢查 `--version`，驗證後替換執行檔。設定檔位於 repository 之外，一般檢查不改寫設定；只有 `--settings` 明確儲存才寫入。還原舊執行檔即可回滾執行檔，沒有資料庫 migration。
 
-Release 壓縮檔安裝需要已確認版本、真實下載 URL、正確平台／架構，以及該發佈版本的 SHA-256 校驗值。macOS 使用 `shasum -a 256` 比對；Windows PowerShell 使用 `Get-FileHash -Algorithm SHA256`。校驗只能確認內容與已公布校驗值一致，不代表驗證發行者身分。首版規劃未簽章、未公證。壓縮檔名稱、內容、校驗值、Gatekeeper 處理方式與 Windows 安裝均需以真實產物驗證，才能將此方式標示為可用。
+Release 壓縮檔安裝需要已確認版本、真實下載 URL、正確平台／架構，以及該發佈版本的 SHA-256 校驗值。macOS 使用 `shasum -a 256` 比對；Windows PowerShell 使用 `Get-FileHash -Algorithm SHA256`。校驗只能確認內容與已公布校驗值一致，不代表驗證發行者身分。首版規劃未簽章、未公證。CI 已驗證 snapshot 壓縮檔名稱、內容、校驗值與三個原生平台的隔離安裝；正式 Release 下載、Gatekeeper 處理與跨正式版本升級仍需另行驗證。
 
 ## 套件管理模板，尚不可直接執行
 
@@ -40,27 +40,28 @@ tlscheck --version
 
 封裝前執行 README 的 Go 測試、race、vet 與空白檢查指令。測試資料維持合成，私有輸入不放入追蹤檔案。自動測試不使用公開服務，但 TLS 測試需要能綁定 loopback 連接埠。
 
-目前證據區分 macOS arm64 原生執行與 Windows amd64 交叉建置。在 macOS 檢查 PowerShell 語法不等於 Windows 執行驗證。Windows 原生測試、規劃的四目標（darwin/windows × amd64/arm64）、壓縮檔安裝與套件升級均需各自取得證據。
+上述 CI 已在 macOS arm64／amd64 與 Windows amd64 執行 Go 測試、race、vet、27 項 Python 回歸、原生 CLI 版本檢查，以及 snapshot 隔離安裝／同版本重裝與設定保留檢查。darwin/windows × amd64/arm64 四目標均完成建置與 SHA-256 核對；Windows arm64 僅交叉建置。Windows 真實 Console 操作、Bash 載入相容補全套件後互動、Fish 語法與互動、Zsh 真正 Tab、Windows PowerShell 補全與 Homebrew／Scoop 安裝升級仍缺驗收紀錄。
 
 ## 發佈準備與失敗重試邊界
 
-已實作 GitHub Actions workflow 與 GoReleaser v2.14.3 設定；本機 snapshot、壓縮檔與校驗通過；先前遠端 CI 的 packages 步驟失敗，本輪 PATH 修正尚未推送，完整跨平台結果待確認，未正式發佈。發佈前確認工具版本、workflow 權限、真實 tap／bucket 目的地與 owner、版本注入（`main.version`、`main.commit`）、架構矩陣、壓縮檔內容、SHA-256，以及兩種語言文件與 LICENSE。首版目標為 v0.1.0，不代表此版本已存在。
+GitHub Actions CI 與 GoReleaser v2.14.3 的四目標試建置已通過上述遠端執行。先前的工具 PATH、Windows 檔案替換／IPv6 與 Python 編碼失敗已由此版本的成功回歸覆蓋；本次沒有正式發佈。發佈前確認工具版本、workflow 權限、真實 tap／bucket 目的地與 owner、版本注入（`main.version`、`main.commit`）、架構矩陣、壓縮檔內容、SHA-256，以及兩種語言文件與 LICENSE。首版目標為 v0.1.0，不代表此版本已存在。
 
 不發佈建置與建立 tag、push、GitHub Release、寫入套件庫必須分開；發佈需要明確授權。在設定與權限尚未驗證前，不提供正式發佈命令。
 
 失敗時記錄來源 commit、預期版本、失敗階段與已發佈產物。檢查既有資產與套件版本後，只重試失敗階段。不得重新建立 tag、同版本覆寫不同內容、重複上傳已發佈資產，或未檢查就降版 tap／bucket。預發佈過濾與可重複執行的重試需以實際 workflow 測試。確認下載、校驗值、套件版本、安裝、`--version` 與設定未改變後，才能宣告成功。
 
-## 仍需補齊的完成紀錄
+## 驗證紀錄與待驗項目
 
 | 證據 | 目前狀態 |
 |---|---|
-| macOS arm64 原始碼建置、CLI 說明與版本 | 已驗證 |
-| Windows amd64 交叉建置 | 已驗證，不是原生執行測試 |
-| Windows 原生執行與安裝 | 未驗證 |
-| 四目標本機 snapshot 壓縮檔與校驗值 | 本機已驗證，未發佈 |
+| macOS arm64／amd64 原生測試、race、CLI 版本 | CI 已通過 |
+| Windows amd64 原生測試、race、DACL／唯讀替換、CLI 版本 | CI 已通過 |
+| 三個原生目標的 snapshot 隔離安裝／同版本重裝、設定保留 | CI 已通過，未驗證跨正式版本升級 |
+| 四目標 snapshot 壓縮檔與 SHA-256 | CI 已通過，未正式發佈；Windows arm64 僅交叉建置 |
+| 真實 Console 與完整 shell 補全互動 | 仍待驗收，詳見開發驗證範圍 |
 | Homebrew tap／Scoop bucket owner 與 repository | 已確認，未寫入遠端 |
-| 套件安裝、升級及設定保留 | 未驗證 |
-| 正式發佈、重試與預發佈行為 | 未驗證 |
+| Homebrew／Scoop 安裝、跨版本升級及設定保留 | 未驗證 |
+| 正式發佈、遠端重試與預發佈行為 | 受控回歸已通過；真實發佈流程未驗證 |
 
 取得真實封裝及安裝證據後，同步更新本文件與英文版本。不能因為已有命令模板，就將發佈說明標為完成。
 
@@ -105,18 +106,18 @@ $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 ```
 
-這些設定僅套用目前工作階段與子程序，不修改使用者全域環境。編碼回歸會在子程序關閉 UTF-8 模式並將隱含編碼警告視為錯誤，再驗證安裝／lint 邊界與中文 stdout／stderr；這不等同 Windows 原生 CI 已通過。
+這些設定僅套用目前工作階段與子程序，不修改使用者全域環境。編碼回歸會在子程序關閉 UTF-8 模式並將隱含編碼警告視為錯誤，再驗證安裝／lint 邊界與中文 stdout／stderr。上述 Windows amd64 CI 已另外通過這些回歸；本機模擬與原生執行證據分別記錄。
 
 
 ## 受保護的發佈流程
 
-`.github/workflows/ci.yml` 在 `macos-15`（arm64）、`macos-15-intel`（amd64）與 `windows-2025`（amd64）測試。原生 job 下載 snapshot 壓縮檔並隔離安裝；Windows arm64 仍只有交叉建置。本機驗證不能證明這些遠端 job 已通過。Actions 固定 commit SHA、Go 固定 1.27.4、GoReleaser 固定 2.14.3。
+`.github/workflows/ci.yml` 在 `macos-15`（arm64）、`macos-15-intel`（amd64）與 `windows-2025`（amd64）測試。原生 job 下載 snapshot 壓縮檔並隔離安裝；Windows arm64 仍只有交叉建置。上述成功執行已核對這三個原生 job 及 packages job 的結果；這不包含真實 Console／完整補全互動或套件管理器驗收。Actions 固定 commit SHA、Go 固定 1.27.4、GoReleaser 固定 2.14.3。
 
 `.github/workflows/release.yml` 接受 push 的 `v*` tag，或在該 tag 手動重跑。必要條件為可重用 CI 檢查通過、repository variable `ENABLE_RELEASE=true` 及 `release` environment。啟用變數前，請先在 environment 設定必要審核者與 tag 限制。本次沒有建立 environment 或 secret。`PACKAGE_REPOSITORY_TOKEN` 使用只限 `vincent119/homebrew-tap` 與 `vincent119/scoop-bucket` 的 contents 讀寫細粒度授權；主專案發佈使用 job 的 contents write `GITHUB_TOKEN`，腳本以 `GH_TOKEN` 讀取。不要將 secrets 提供給 pull request 檢查。
 
 發佈程式還要求 `--execute`、`RELEASE_APPROVED` 等於精確 tag、乾淨來源、HEAD／tag 相同，以及 GoReleaser 中繼資料一致。先建立 draft，在內文固定來源 commit，只補缺少資產，下載核對每份內容，再改為已發佈。既有 Release 若來源不明或同名內容不同，就會停止。套件更新再次核對已發佈產物，略過預發佈與較新穩定版，接受相同版本相同內容，拒絕同版本不同內容，並以 GitHub Contents API 的 SHA 條件防止並行覆寫。發佈 job 共用不取消中的 concurrency group，將套件更新序列化。
 
-檢查失敗階段後，重跑相同 tag 的 workflow。必須保留 Release 的來源標記，不得刪除以繞過不一致檢查。若 Release 成功但套件失敗，保留 Release；重跑時核對後續作。受控測試不連 GitHub 即模擬上述轉換。真實遠端重試、套件管理器安裝／升級及 Windows 原生結果仍待驗證。目前產物未簽章、未公證。
+檢查失敗階段後，重跑相同 tag 的 workflow。必須保留 Release 的來源標記，不得刪除以繞過不一致檢查。若 Release 成功但套件失敗，保留 Release；重跑時核對後續作。受控測試不連 GitHub 即模擬上述轉換。真實遠端重試與套件管理器安裝／升級仍待驗證。目前產物未簽章、未公證。
 
 ## 審查修正與重試細節
 
@@ -128,12 +129,12 @@ $env:PYTHONIOENCODING = 'utf-8'
 
 ## CLI 相容性更新
 
-參數與輸出以 [README](../README.zh-TW.md) 為準：預設 table，新增四格式／安全 output、強制 local/remote、語系覆寫、settings 與四 shell 補全。一般操作仍不寫設定；僅 settings 明確儲存例外。原生 Windows Console／ACL／提交、Fish 互動與四目標原生執行尚需平台驗證。本次不修改 CI 或建立發佈。
+參數與輸出以 [README](../README.zh-TW.md) 為準：預設 table，新增四格式／安全 output、強制 local/remote、語系覆寫、settings 與四 shell 補全。一般操作仍不寫設定；僅 settings 明確儲存例外。Windows amd64 的自動化 ACL／提交回歸已通過；真實 Windows Console 與完整 shell 補全互動仍待驗收。Windows arm64 僅交叉建置。本次文件同步不修改 CI 或建立發佈。
 
-八項 CLI 審查修正已加入回歸：補全偵錯無寫入、空旗標值、shell help、終端斷線、ACL 保存／失敗清理、advice code、table 分隔符及逐輸入摘要。macOS ACL 透過固定 SDK 的有界原生屬性呼叫處理，CLI 不依賴外部 chmod／Python；測試才使用這些工具。Windows DACL 已有原生測試來源與交叉編譯，尚未以此宣稱 Windows 執行通過。
+八項 CLI 審查修正已加入回歸：補全偵錯無寫入、空旗標值、shell help、終端斷線、ACL 保存／失敗清理、advice code、table 分隔符及逐輸入摘要。macOS ACL 透過固定 SDK 的有界原生屬性呼叫處理，CLI 不依賴外部 chmod／Python；測試才使用這些工具。Windows DACL、唯讀原子替換與失敗清理回歸已在上述 Windows amd64 CI 通過；這不代表所有 Windows／檔案系統組合均已驗證。
 
 ## CI 封裝工具 PATH 修正
 
-固定版本 Action 只有 `install-only: true` 路徑會將安裝目錄加入後續 steps 的 PATH，因此 CI 先顯式安裝 v2.14.3，再於 shell 執行 `goreleaser --version`、`goreleaser check` 及既有 snapshot。Action SHA、唯讀 contents 權限、`--snapshot --skip=publish` 與 release.disable 保持不變。回歸檢查涵蓋安裝／執行順序與禁止發佈；本機成功不等於 GitHub runner 已通過。
+固定版本 Action 只有 `install-only: true` 路徑會將安裝目錄加入後續 steps 的 PATH，因此 CI 先顯式安裝 v2.14.3，再於 shell 執行 `goreleaser --version`、`goreleaser check` 及既有 snapshot。Action SHA、唯讀 contents 權限、`--snapshot --skip=publish` 與 release.disable 保持不變。回歸檢查涵蓋安裝／執行順序與禁止發佈；上述 packages job 已通過工具版本、設定、Workflow 語法與四目標試建置檢查。
 
 行為依據：[固定版本 Action 原始碼](https://github.com/goreleaser/goreleaser-action/blob/e435ccd777264be153ace6237001ef4d979d3a7a/src/main.ts)。

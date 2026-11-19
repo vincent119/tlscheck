@@ -2,13 +2,13 @@
 
 [English](releasing.md) | [繁體中文](releasing.zh-TW.md) | [README](../README.md)
 
-This guide is for maintainers preparing macOS and Windows distribution and users evaluating installation options. The CLI can currently be built from source. Local snapshot packaging has been verified; remote workflow execution, downloadable releases and package-manager installation have not. Do not interpret the templates below as available packages.
+This guide is for maintainers preparing macOS and Windows distribution and users evaluating installation options. The CLI can be built from source. The 2026-11-18 [cross-platform CI run](https://github.com/vincent119/tlscheck/actions/runs/44285001106) (source `a1cff07676d94c4ac7e663bec5ea83c8584d42a9`, attempt 1) passed all jobs: four-target snapshot packaging and checksums, plus native tests and isolated installation/same-version reinstallation on macOS arm64/amd64 and Windows amd64. Windows arm64 is cross-build only; official releases, package-manager installation/upgrades, and real interactive operation remain unverified. Do not interpret the templates below as available packages.
 
 ## Available installation and upgrade
 
-Use the source-build commands in the [README](../README.md). To upgrade a local build, retain a copy of the previous binary, build the reviewed source revision, check `--version`, then replace your executable after validation. The configuration file is outside the repository and is not modified by the application. Restoring the previous binary rolls back the executable; no database migration is involved.
+Use the source-build commands in the [README](../README.md). To upgrade a local build, retain a copy of the previous binary, build the reviewed source revision, check `--version`, then replace your executable after validation. The configuration file is outside the repository; ordinary checks do not modify it, and only an explicit save in `--settings` writes it. Restoring the previous binary rolls back the executable; no database migration is involved.
 
-Release archive installation will require a confirmed version, real download URL, matching platform/architecture and SHA-256 checksum from the release. On macOS compare the archive using `shasum -a 256`; on Windows PowerShell use `Get-FileHash -Algorithm SHA256`. A checksum establishes integrity relative to the published checksum, not publisher authentication. Initial artifacts are planned to be unsigned and unnotarized. Archive names, contents, checksums, Gatekeeper handling and Windows installation must be verified against actual artifacts before this route is documented as ready.
+Release archive installation will require a confirmed version, real download URL, matching platform/architecture and SHA-256 checksum from the release. On macOS compare the archive using `shasum -a 256`; on Windows PowerShell use `Get-FileHash -Algorithm SHA256`. A checksum establishes integrity relative to the published checksum, not publisher authentication. Initial artifacts are planned to be unsigned and unnotarized. CI verified snapshot archive names, contents, checksums, and isolated installation on three native platforms. Official release downloads, Gatekeeper handling, and upgrades between published versions still require separate validation.
 
 ## Package-manager templates, not ready to run
 
@@ -40,27 +40,28 @@ Existing `config.json` contents must remain unchanged through install and upgrad
 
 Run the Go test, race, vet and whitespace commands from the README before packaging. Keep test materials synthetic and private inputs outside tracked files. The application uses no public services in automated tests, but loopback binding is needed for TLS tests.
 
-Current evidence separates macOS arm64 native execution from Windows amd64 cross-building. PowerShell syntax can be checked on macOS without proving Windows execution. Windows native tests, the four planned targets (darwin/windows × amd64/arm64), archive installation and package upgrades require their own evidence.
+The CI run above passed Go tests, race detection, vet, 27 Python regressions, native CLI version checks, and isolated snapshot installation/same-version reinstallation with configuration-preservation checks on macOS arm64/amd64 and Windows amd64. All four darwin/windows × amd64/arm64 targets were built and their SHA-256 checksums verified; Windows arm64 is cross-build only. Real Windows Console operation, Bash interaction with compatible completion dependencies loaded, Fish syntax and interaction, actual Zsh Tab completion, Windows PowerShell completion, and Homebrew/Scoop installation/upgrades still need acceptance records.
 
 ## Release preparation and retry boundaries
 
-GitHub Actions workflows and GoReleaser v2.14.3 configuration are implemented. Local snapshot builds and checksum checks passed. A previous hosted packages job failed; this PATH fix has not been pushed, so the complete native matrix remains unverified. No publishing has occurred. Before a release, confirm tool versions, workflow permissions, real tap/bucket destinations and owners, version injection (`main.version`, `main.commit`), architecture matrix, archive contents, SHA-256 output and both language documents plus LICENSE. The initial target is v0.1.0, not an assertion that this version exists.
+GitHub Actions CI and the GoReleaser v2.14.3 four-target trial build passed in the hosted run above. Its successful regressions cover the previous tool PATH, Windows file-replacement/IPv6, and Python encoding failures. This work has not performed an official release. Before a release, confirm tool versions, workflow permissions, real tap/bucket destinations and owners, version injection (`main.version`, `main.commit`), architecture matrix, archive contents, SHA-256 output and both language documents plus LICENSE. The initial target is v0.1.0, not an assertion that this version exists.
 
 Keep nonpublishing builds separate from tag creation, pushing, GitHub Releases and package-repository writes. Publishing needs explicit authorization. No release command is supplied until its configuration and permissions have been verified.
 
 On failure, record the source commit, intended version, failed stage and artifacts already published. Retry only the failed stage after checking existing assets and package versions. Do not recreate tags, overwrite different bytes under the same version, duplicate published assets, or downgrade a tap/bucket blindly. Prerelease filtering and idempotent retries must be tested with the actual workflow. Confirm downloads, checksums, package versions, installation, `--version` and unchanged configuration before declaring success.
 
-## Completion record still required
+## Validation record and pending checks
 
 | Evidence | Current status |
 |---|---|
-| Source build and CLI help/version on macOS arm64 | Verified |
-| Windows amd64 cross-build | Verified; not a native runtime test |
-| Windows native execution and installation | Not verified |
-| Four-target local snapshot archives and checksums | Verified locally; not published |
+| macOS arm64/amd64 native tests, race detection, CLI version | Passed CI |
+| Windows amd64 native tests, race detection, DACL/read-only replacement, CLI version | Passed CI |
+| Isolated snapshot installation/same-version reinstallation and configuration preservation on three native targets | Passed CI; upgrades between published versions unverified |
+| Four-target snapshot archives and SHA-256 | Passed CI; not officially published; Windows arm64 is cross-build only |
+| Real Console and full interactive shell completion | Pending; see development-validation scope |
 | Homebrew tap / Scoop bucket owners and repositories | Confirmed; no remote writes performed |
-| Package install, upgrade and config preservation | Not verified |
-| Publishing, retry and prerelease behavior | Not verified |
+| Homebrew/Scoop installation, cross-version upgrades and configuration preservation | Not verified |
+| Publishing, remote retry and prerelease behavior | Controlled regressions passed; actual publishing workflow unverified |
 
 Update this guide and its Chinese counterpart together when actual packaging and installation evidence becomes available. Do not mark distribution instructions complete solely because a command template exists.
 
@@ -105,18 +106,18 @@ $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 ```
 
-These settings apply only to the current session and its children, without changing user-wide settings. Encoding regressions disable UTF-8 mode in a child process, treat implicit-encoding warnings as errors, and check installation/lint boundaries and Chinese stdout/stderr. This does not establish native Windows CI success.
+These settings apply only to the current session and its children, without changing user-wide settings. Encoding regressions disable UTF-8 mode in a child process, treat implicit-encoding warnings as errors, and check installation/lint boundaries and Chinese stdout/stderr. The Windows amd64 CI run above separately passed these regressions; local simulation and native execution are recorded as distinct evidence.
 
 
 ## Protected release workflow
 
-`.github/workflows/ci.yml` tests on `macos-15` (arm64), `macos-15-intel` (amd64) and `windows-2025` (amd64). Native jobs download and install the snapshot archive in isolation; Windows arm64 remains cross-build only. The local machine cannot establish that these hosted jobs have passed. Actions are pinned to commit SHAs, Go to 1.27.4 and GoReleaser to 2.14.3.
+`.github/workflows/ci.yml` tests on `macos-15` (arm64), `macos-15-intel` (amd64) and `windows-2025` (amd64). Native jobs download and install the snapshot archive in isolation; Windows arm64 remains cross-build only. The successful run above confirms all three native jobs and the packages job; it does not cover real Console/full completion interaction or package-manager acceptance. Actions are pinned to commit SHAs, Go to 1.27.4 and GoReleaser to 2.14.3.
 
 `.github/workflows/release.yml` accepts a pushed `v*` tag or a manual rerun on that tag. It requires the reusable CI checks, repository variable `ENABLE_RELEASE=true` and the `release` environment. Configure required reviewers and tag restrictions on that environment before enabling the variable. No environment or secret has been created by this change. Set `PACKAGE_REPOSITORY_TOKEN` as a fine-grained credential limited to contents read/write on `vincent119/homebrew-tap` and `vincent119/scoop-bucket`; main-repository publication uses the job's `GITHUB_TOKEN` with contents write. The script reads it as `GH_TOKEN`. Do not provide secrets to pull-request checks.
 
 The publisher additionally requires `--execute`, `RELEASE_APPROVED` equal to the exact tag, clean source, HEAD/tag equality and matching GoReleaser metadata. It creates a draft, pins its source commit in the body, fills only missing assets, downloads and compares every asset, then marks the release published. An existing release with unknown source or different same-name bytes stops. A package update rechecks the published assets, skips prereleases and newer stable versions, accepts identical same-version content, rejects conflicting same-version content and uses GitHub Contents API SHA conditions against concurrent changes. Release jobs share one noncancelling concurrency group to serialize package updates.
 
-Retry by rerunning the same tag workflow after reviewing the failed stage. The release must retain its source marker. Do not delete it to bypass a mismatch. A package failure after a successful Release leaves that Release intact; a rerun verifies it and continues. Controlled tests simulate these transitions without contacting GitHub. Real remote retry, package-manager install/upgrade and Windows native results remain pending. Current artifacts are unsigned and unnotarized.
+Retry by rerunning the same tag workflow after reviewing the failed stage. The release must retain its source marker. Do not delete it to bypass a mismatch. A package failure after a successful Release leaves that Release intact; a rerun verifies it and continues. Controlled tests simulate these transitions without contacting GitHub. Real remote retry and package-manager install/upgrade remain pending. Current artifacts are unsigned and unnotarized.
 
 ## Review fixes and retry details
 
@@ -128,12 +129,12 @@ Certificate SAN URIs are displayed individually. Hierarchical URI identity paths
 
 ## CLI compatibility update
 
-See [README](../README.md) for table-default reporting, four formats and protected output, forced local/remote inputs, language overrides, settings and four-shell completion. Ordinary commands still never write configuration; explicit settings save is the exception. Native Windows Console/ACL/commit behavior, interactive Fish and native execution on all four targets need platform evidence. This change does not modify CI or create a release.
+See [README](../README.md) for table-default reporting, four formats and protected output, forced local/remote inputs, language overrides, settings and four-shell completion. Ordinary commands still never write configuration; explicit settings save is the exception. Automated Windows amd64 ACL/commit regressions passed; real Windows Console operation and full interactive shell completion still need acceptance testing. Windows arm64 is cross-build only. This documentation update does not modify CI or create a release.
 
-The eight CLI review fixes have regression coverage for completion debug writes, empty flag values, shell help, terminal disconnect, ACL preservation/failure cleanup, advice codes, table delimiters, and per-input summaries. macOS ACL handling uses bounded native attribute calls; CLI runtime does not depend on chmod/Python, which are test tools only. Windows DACL native test sources cross-compile; native Windows execution remains unverified.
+The eight CLI review fixes have regression coverage for completion debug writes, empty flag values, shell help, terminal disconnect, ACL preservation/failure cleanup, advice codes, table delimiters, and per-input summaries. macOS ACL handling uses bounded native attribute calls; CLI runtime does not depend on chmod/Python, which are test tools only. Windows DACL, read-only atomic replacement, and failure-cleanup regressions passed in the Windows amd64 CI run above; this does not validate every Windows/filesystem combination.
 
 ## CI packaging-tool PATH fix
 
-The pinned action adds its installation directory to later steps only when `install-only: true`. CI now explicitly installs v2.14.3, then runs `goreleaser --version`, `goreleaser check`, and the existing snapshot in shell steps. The action SHA, read-only contents permissions, `--snapshot --skip=publish`, and release.disable remain unchanged. Regression checks cover installation/execution order and nonpublishing behavior; local success does not establish hosted-runner success.
+The pinned action adds its installation directory to later steps only when `install-only: true`. CI now explicitly installs v2.14.3, then runs `goreleaser --version`, `goreleaser check`, and the existing snapshot in shell steps. The action SHA, read-only contents permissions, `--snapshot --skip=publish`, and release.disable remain unchanged. Regression checks cover installation/execution order and nonpublishing behavior; the packages job above passed tool-version, configuration, workflow-syntax, and four-target trial-build checks.
 
 Behavior reference: [pinned action source](https://github.com/goreleaser/goreleaser-action/blob/e435ccd777264be153ace6237001ef4d979d3a7a/src/main.ts).
