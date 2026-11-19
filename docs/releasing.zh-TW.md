@@ -62,6 +62,7 @@ GitHub Actions CI 與 GoReleaser v2.14.3 的四目標試建置已通過上述遠
 | 三個原生目標的 snapshot 隔離安裝／同版本重裝、設定保留 | CI 已通過，未驗證跨正式版本升級 |
 | 四目標 snapshot 壓縮檔與 SHA-256 | CI 已通過，未正式發佈；Windows arm64 僅交叉建置 |
 | PowerShell 主測試及兩子案例具名 PASS、未 Skip | 三平台普通／race 六份 JSON 已核對，詳見下方證據 |
+| 無 Go 的 Windows exe 自動驗收 | 使用者原生報告 53 項 PASS、0 FAIL；版本／雜湊與設定指紋已核對 |
 | 真實 Console 與完整 shell 補全互動 | 仍待驗收，詳見開發驗證範圍 |
 | Homebrew tap／Scoop bucket owner 與 repository | 已確認，未寫入遠端 |
 | Homebrew／Scoop 安裝、跨版本升級及設定保留 | 未驗證 |
@@ -98,6 +99,21 @@ python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
 這次關閉 S03-V03 的 Windows amd64 原生普通／race 驗證。測試使用標準 `testing/synctest` 虛擬時鐘，保留 1 ms 最小期限並驗證自訂期限，移除 DNS 必須在實際 1 ms 內開始的排程假設；DNS 前已到期時仍不得執行 DNS／連線，回報執行錯誤與結束碼 2。產品的共用 deadline、逾時值域與結束碼契約未變。前次 CI 44462742449 的 Windows race 失敗保留為修正前證據，不以交叉編譯代替這次原生結果。
 
 本次 CI 不等同真實 Windows Console、鍵盤 Tab 或設定選單驗收，也不補足 Bash／Fish 等尚缺實機的 shell 項目；這些項目與正式套件安裝／升級仍維持未完成。
+
+### 無 Go 的 Windows 執行檔自動驗收
+
+已核對使用者提供的 `results.json`：Windows X64、系統版本 `10.0.26200.0`、PowerShell `7.6.10`，執行檔版本 `acceptance-75a1c67`，產品來源 commit 為 `75a1c673a1ddc2d10b22b96c985d991f985acef6`。此為使用者在 Windows 執行驗收包的證據，與前述 GitHub Actions 證據分開記錄。
+
+報告包含 53 個不重複案例，全部 PASS、0 FAIL。其中兩種補全變體各 18 次程序成功，沒有非預期診斷；其他檢查涵蓋版本、三語說明、參數、四格式、報告覆寫保護及非 TTY 選單拒絕。程序紀錄共 42 次結束碼 0、11 次預期錯誤結束碼 2。日常設定、隔離設定及 debug sentinel 的前後指紋均相同。
+
+| 核對項目 | SHA-256 |
+|---|---|
+| 驗收用 `tlscheck.exe` | `f6a807a47b6eb8b8fea2a4cb1a4fca029657e215002a567cc8063ee15b414ff2` |
+| 驗收用 `test-windows.ps1` | `9eeefa4cd31579870fe6157be5711a7be3b2d2a499de769cabd923800293799e` |
+
+兩個雜湊均符合當次交付檔案。產品 commit 不代表驗收腳本已包含在該 commit；本次腳本以其獨立雜湊追溯，也不宣稱該腳本已通過 Windows CI。原始報告只保存於私有驗收證據，不公開個人路徑或設定資訊。
+
+這次完成 Windows 執行檔自動驗收，沒有執行真實鍵盤 Tab、互動選單儲存或 Console 模式復原驗收；這些項目仍未完成。Bash／Fish 與正式套件安裝／升級的缺口亦未關閉，整份 S09 不結案。
 
 ## 指令參考
 

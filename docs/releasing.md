@@ -62,6 +62,7 @@ On failure, record the source commit, intended version, failed stage and artifac
 | Isolated snapshot installation/same-version reinstallation and configuration preservation on three native targets | Passed CI; upgrades between published versions unverified |
 | Four-target snapshot archives and SHA-256 | Passed CI; not officially published; Windows arm64 is cross-build only |
 | Named PowerShell main/subcase PASS without Skip | Verified six normal/race JSON files across three platforms; see evidence below |
+| Windows exe automated acceptance without Go | User-run native report: 53 PASS, 0 FAIL; versions, hashes and configuration fingerprints verified |
 | Real Console and full interactive shell completion | Pending; see development-validation scope |
 | Homebrew tap / Scoop bucket owners and repositories | Confirmed; no remote writes performed |
 | Homebrew/Scoop installation, cross-version upgrades and configuration preservation | Not verified |
@@ -98,6 +99,21 @@ All 18 required named passes have preceding `run` events and completed package `
 This closes S03-V03 for Windows amd64 native normal/race verification. Tests use the standard `testing/synctest` virtual clock, retain the 1 ms minimum and verify a custom timeout, removing the scheduling assumption that DNS must begin within a real millisecond. Expiry before DNS must prevent DNS/dialing and still report an execution error with exit code 2. Product behavior for the shared deadline, timeout range, and exit codes is unchanged. The Windows race failure in CI 44462742449 remains pre-fix evidence; cross-compilation is not substituted for this native result.
 
 This CI result does not provide real Windows Console, keyboard Tab, or settings-menu acceptance, nor the outstanding Bash/Fish shell checks. Those items and official package installation/upgrades remain pending.
+
+### Windows executable automated acceptance without Go
+
+Verified the user-supplied `results.json` from Windows X64, OS version `10.0.26200.0`, PowerShell `7.6.10`, and executable version `acceptance-75a1c67`, built from product commit `75a1c673a1ddc2d10b22b96c985d991f985acef6`. This evidence comes from the user running the acceptance bundle on Windows and is recorded separately from GitHub Actions results above.
+
+The report contains 53 unique cases, all PASS with 0 FAIL. Both completion variants have 18 successful process calls each without unexpected diagnostics. Other checks cover version output, help in three languages, arguments, four formats, report overwrite protection, and rejection of settings without a TTY. Process records contain 42 exit codes of 0 and 11 expected error exit codes of 2. Before/after fingerprints match for daily configuration, isolated configuration, and the debug sentinel.
+
+| Verified artifact | SHA-256 |
+|---|---|
+| Acceptance `tlscheck.exe` | `f6a807a47b6eb8b8fea2a4cb1a4fca029657e215002a567cc8063ee15b414ff2` |
+| Acceptance `test-windows.ps1` | `9eeefa4cd31579870fe6157be5711a7be3b2d2a499de769cabd923800293799e` |
+
+Both hashes match the delivered artifacts. The product commit does not imply that the acceptance script is included in that commit; the script is traced by its independent hash, with no claim that it has passed Windows CI. The original report is retained only as private acceptance evidence, without publishing personal paths or configuration information.
+
+This completes Windows executable automated acceptance. Actual keyboard Tab, interactive settings save, and Console mode restoration were not exercised and remain pending. Outstanding Bash/Fish and official package installation/upgrade checks also remain open; S09 as a whole is not complete.
 
 ## Command references
 
