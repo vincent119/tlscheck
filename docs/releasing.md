@@ -58,6 +58,7 @@ On failure, record the source commit, intended version, failed stage and artifac
 |---|---|
 | macOS arm64/amd64 native tests, race detection, CLI version | Passed CI |
 | Windows amd64 native tests, race detection, DACL/read-only replacement, CLI version | Passed CI |
+| Timeout options and expiry before DNS regressions | Named PASS without Skip in the latest normal/race runs on three platforms; Windows native verification complete |
 | Isolated snapshot installation/same-version reinstallation and configuration preservation on three native targets | Passed CI; upgrades between published versions unverified |
 | Four-target snapshot archives and SHA-256 | Passed CI; not officially published; Windows arm64 is cross-build only |
 | Named PowerShell main/subcase PASS without Skip | Verified six normal/race JSON files across three platforms; see evidence below |
@@ -89,6 +90,14 @@ Verified [CI 44454812073, attempt 2](https://github.com/vincent119/tlscheck/acti
 | Windows amd64 (windows-2025) | Main test and both subcases PASS, no Skip | Main test and both subcases PASS, no Skip |
 
 All 18 required named passes have preceding `run` events and completed package `pass` events, with no Skip in the main test subtree. The first macOS amd64 attempt failed on Go proxy DNS; successful events were obtained after the rerun. Closure relies on raw JSON, not package success in the older CI 44452386656. This completes the cross-platform engine portion of S09-T10. Real Windows Console/keyboard Tab, the settings menu, and other outstanding shell acceptance checks remain pending, so S09-T10 and S09 as a whole remain open.
+
+### Native timeout regression acceptance
+
+[CI 44463960289](https://github.com/vincent119/tlscheck/actions/runs/44463960289) passed on its first attempt at commit `1bae9a18a85c60fd40bf38eedc24e1a948fd48a2`. All six normal/race JSON files across three platforms were individually checked: in `internal/check`, `TestRemoteTimeoutOptionUsesSharedDeadline`, `/最小期限`, `/自訂期限`, and `TestRemoteTimeoutBeforeDNSKeepsExecutionFailure` each have named `run`→`pass` events without Skip. The existing `TestRemoteSharesOneDeadlineAcrossNetworkStages` also passed by name, and all packages completed successfully.
+
+This closes S03-V03 for Windows amd64 native normal/race verification. Tests use the standard `testing/synctest` virtual clock, retain the 1 ms minimum and verify a custom timeout, removing the scheduling assumption that DNS must begin within a real millisecond. Expiry before DNS must prevent DNS/dialing and still report an execution error with exit code 2. Product behavior for the shared deadline, timeout range, and exit codes is unchanged. The Windows race failure in CI 44462742449 remains pre-fix evidence; cross-compilation is not substituted for this native result.
+
+This CI result does not provide real Windows Console, keyboard Tab, or settings-menu acceptance, nor the outstanding Bash/Fish shell checks. Those items and official package installation/upgrades remain pending.
 
 ## Command references
 

@@ -58,6 +58,7 @@ GitHub Actions CI 與 GoReleaser v2.14.3 的四目標試建置已通過上述遠
 |---|---|
 | macOS arm64／amd64 原生測試、race、CLI 版本 | CI 已通過 |
 | Windows amd64 原生測試、race、DACL／唯讀替換、CLI 版本 | CI 已通過 |
+| 逾時設定與 DNS 前到期回歸 | 最新三平台普通／race 均具名 PASS、未 Skip；Windows 原生驗證已完成 |
 | 三個原生目標的 snapshot 隔離安裝／同版本重裝、設定保留 | CI 已通過，未驗證跨正式版本升級 |
 | 四目標 snapshot 壓縮檔與 SHA-256 | CI 已通過，未正式發佈；Windows arm64 僅交叉建置 |
 | PowerShell 主測試及兩子案例具名 PASS、未 Skip | 三平台普通／race 六份 JSON 已核對，詳見下方證據 |
@@ -89,6 +90,14 @@ python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
 | Windows amd64（windows-2025） | 主測試及兩子案例均 PASS，未 Skip | 主測試及兩子案例均 PASS，未 Skip |
 
 共 18 個必要具名 PASS，各自有先行 `run` 與套件完成 `pass`，主測試子樹無 Skip。第一次執行的 macOS amd64 因 Go proxy DNS 失敗，重跑後才取得成功事件；本次依原始 JSON 結案，不以舊 CI 44452386656 的套件成功記錄推定未 Skip。這些證據完成了 S09-T10 的跨平台引擎分項；真實 Windows Console／鍵盤 Tab、設定選單與其他尚缺實機的 shell 驗收仍未完成，S09-T10 與整份 S09 不因此整體結案。
+
+### 逾時回歸的原生驗收
+
+[CI 44463960289](https://github.com/vincent119/tlscheck/actions/runs/44463960289) 第一次執行已全數成功，來源 commit 為 `1bae9a18a85c60fd40bf38eedc24e1a948fd48a2`。三平台的六份普通／race JSON 已逐份核對：`internal/check` 的 `TestRemoteTimeoutOptionUsesSharedDeadline`、`/最小期限`、`/自訂期限`、`TestRemoteTimeoutBeforeDNSKeepsExecutionFailure` 均有具名 `run`→`pass`，沒有 Skip。既有 `TestRemoteSharesOneDeadlineAcrossNetworkStages` 也具名通過，所有套件完成成功。
+
+這次關閉 S03-V03 的 Windows amd64 原生普通／race 驗證。測試使用標準 `testing/synctest` 虛擬時鐘，保留 1 ms 最小期限並驗證自訂期限，移除 DNS 必須在實際 1 ms 內開始的排程假設；DNS 前已到期時仍不得執行 DNS／連線，回報執行錯誤與結束碼 2。產品的共用 deadline、逾時值域與結束碼契約未變。前次 CI 44462742449 的 Windows race 失敗保留為修正前證據，不以交叉編譯代替這次原生結果。
+
+本次 CI 不等同真實 Windows Console、鍵盤 Tab 或設定選單驗收，也不補足 Bash／Fish 等尚缺實機的 shell 項目；這些項目與正式套件安裝／升級仍維持未完成。
 
 ## 指令參考
 
