@@ -14,6 +14,7 @@ type tableReport struct {
 	out             *bytes.Buffer
 	t               *i18n.Translator
 	width           int
+	summary         bool
 	err             error
 	pending         []tableCheck
 	pendingCodes    []Message
@@ -94,6 +95,11 @@ func (r *tableReport) block(title string, rows []row) {
 		if c.Name == "issues" {
 			name = label(r.t, "issues")
 		}
+		// 只省略明確無問題的成功敘述；未知狀態與任何建議保守保留。
+		if r.summary && result.Status == "passed" && result.Severity == "none" && result.Advice == nil {
+			checks = append(checks, []string{name, tableStatus(r.t, result.Status), ""})
+			continue
+		}
 		r.diagnosticCount++
 		id := strconv.Itoa(r.diagnosticCount)
 		description := result.Message
@@ -103,7 +109,7 @@ func (r *tableReport) block(title string, rows []row) {
 		if result.Advice != nil {
 			description += "; " + label(r.t, "advice") + ": " + result.Advice.Message
 		}
-		checks = append(checks, []string{"[" + id + "] " + name, r.t.Text("status."+result.Status, nil), description})
+		checks = append(checks, []string{"[" + id + "] " + name, tableStatus(r.t, result.Status), description})
 		r.diagnostics = append(r.diagnostics, row{"[" + id + "]", title + " / " + name}, row{label(r.t, "severity"), displayValue(r.t, "severity", result.Severity)})
 		if result.Code != "" {
 			r.diagnostics = append(r.diagnostics, row{label(r.t, "code"), result.Code})
@@ -272,7 +278,11 @@ func inputFailures(d Document, index int) []Check {
 }
 
 func renderTable(out *bytes.Buffer, d Document, width int) error {
-	r := tableReport{out: out, t: i18n.New(d.Language), width: width}
+	return renderTableDetail(out, d, width, DetailFull)
+}
+
+func renderTableDetail(out *bytes.Buffer, d Document, width int, detail Detail) error {
+	r := tableReport{out: out, t: i18n.New(d.Language), width: width, summary: detail == DetailSummary}
 	if width < 40 {
 		return fmt.Errorf("表格可用欄寬不足")
 	}
@@ -284,7 +294,11 @@ func renderTable(out *bytes.Buffer, d Document, width int) error {
 			summary[i].Value = displayValue(r.t, "severity", d.Summary.HighestSeverity)
 		}
 	}
-	summary = append(summary, row{r.text("scope"), r.text("scope_note")})
+	scopeNote := r.text("scope_note")
+	if r.summary && len(d.Inputs) == 1 {
+		scopeNote = r.text("single_scope_note")
+	}
+	summary = append(summary, row{r.text("scope"), scopeNote})
 	r.block(r.text("global_checks"), summary)
 	views := map[int]InputView{}
 	inputViews := d.Presentation.Inputs
@@ -311,9 +325,17 @@ func renderTable(out *bytes.Buffer, d Document, width int) error {
 			rows = append(rows, row{label(r.t, "local_source"), *input.LocalSource})
 		}
 		if v, ok := views[input.Index]; ok {
-			rows = append(rows, row{label(r.t, "result"), r.t.Text("status."+v.Status, nil)}, row{label(r.t, "severity"), displayValue(r.t, "severity", v.HighestSeverity)}, row{r.text("applicable_checks"), r.t.Text("summary.counts", i18n.Params{"Passed": strconv.Itoa(v.Passed), "Failed": strconv.Itoa(v.Failed), "NotPerformed": strconv.Itoa(v.NotPerformed)})})
+			rows = append(rows, row{label(r.t, "result"), r.t.Text("status."+v.Status, nil)})
+			if !r.summary || v.HighestSeverity != "none" {
+				rows = append(rows, row{label(r.t, "severity"), displayValue(r.t, "severity", v.HighestSeverity)})
+			}
+			if !r.summary {
+				rows = append(rows, row{r.text("applicable_checks"), r.t.Text("summary.counts", i18n.Params{"Passed": strconv.Itoa(v.Passed), "Failed": strconv.Itoa(v.Failed), "NotPerformed": strconv.Itoa(v.NotPerformed)})})
+			}
 		}
-		rows = append(rows, r.checks(inputFailures(d, input.Index))...)
+		if !r.summary {
+			rows = append(rows, r.checks(inputFailures(d, input.Index))...)
+		}
 		r.block(fmt.Sprintf("%s [%d]", label(r.t, "inputs"), input.Index), rows)
 	}
 	if len(d.Inputs) == 0 {
@@ -324,11 +346,31 @@ func renderTable(out *bytes.Buffer, d Document, width int) error {
 		checks = append(checks, remote.Trust.Checks...)
 		rows := r.checks(checks)
 		rows = append(rows, r.issues(remote.Issues)...)
-		rows = append(rows, r.object(reflect.ValueOf(remote), "input_index", "target", "certificates", "checks", "trust", "limitations", "issues")...)
-		for i, c := range remote.Certificates {
-			rows = append(rows, row{fmt.Sprintf("%s [%d]", label(r.t, "certificates"), i), c.ID})
+		if r.summary {
+			if remote.TLS != nil {
+				rows = append(rows, r.selected(reflect.ValueOf(*remote.TLS), "version", "cipher_suite")...)
+			} else {
+				rows = append(rows, row{label(r.t, "tls"), label(r.t, "unknown")})
+			}
+			// 遠端憑證順序沿用握手所觀測的鏈，不以 CN 或名稱猜測葉憑證。
+			if len(remote.Certificates) > 0 {
+				rows = append(rows, r.certificateSummary(remote.Certificates[0])...)
+				for i, c := range remote.Certificates[1:] {
+					if c.Expired || c.ExpiringSoon {
+						rows = append(rows, row{label(r.t, "certificates"), strconv.Itoa(i + 1)})
+						rows = append(rows, r.certificateSummary(c)...)
+					}
+				}
+			} else {
+				rows = append(rows, row{label(r.t, "certificates"), label(r.t, "unknown")})
+			}
+		} else {
+			rows = append(rows, r.object(reflect.ValueOf(remote), "input_index", "target", "certificates", "checks", "trust", "limitations", "issues")...)
+			for i, c := range remote.Certificates {
+				rows = append(rows, row{fmt.Sprintf("%s [%d]", label(r.t, "certificates"), i), c.ID})
+			}
+			rows = append(rows, r.chains(remote.Trust)...)
 		}
-		rows = append(rows, r.chains(remote.Trust)...)
 		rows = append(rows, r.messages(remote.Limitations)...)
 		r.block(fmt.Sprintf("%s [%d] %s", label(r.t, "remote"), remote.InputIndex, remote.Target), rows)
 	}
@@ -339,9 +381,14 @@ func renderTable(out *bytes.Buffer, d Document, width int) error {
 		if c.Pairing != nil {
 			rows = append(rows, r.checks([]Check{{Name: "pairing", Result: *c.Pairing}})...)
 		}
-		rows = append(rows, r.object(reflect.ValueOf(c), "info", "checks", "trust", "pairing")...)
-		rows = append(rows, row{label(r.t, "certificate_id"), c.Info.ID})
-		rows = append(rows, r.chains(c.Trust)...)
+		if r.summary {
+			rows = append(rows, r.selected(reflect.ValueOf(c), "role", "sources", "matching_keys")...)
+			rows = append(rows, r.certificateSummary(c.Info)...)
+		} else {
+			rows = append(rows, r.object(reflect.ValueOf(c), "info", "checks", "trust", "pairing")...)
+			rows = append(rows, row{label(r.t, "certificate_id"), c.Info.ID})
+			rows = append(rows, r.chains(c.Trust)...)
+		}
 		r.block(fmt.Sprintf("%s / %s [%d]", label(r.t, "local"), label(r.t, "certificates"), i), rows)
 	}
 	for i, key := range d.Local.Keys {
@@ -350,7 +397,14 @@ func renderTable(out *bytes.Buffer, d Document, width int) error {
 		if key.Curve == nil && key.Algorithm != "ECDSA" {
 			omitted = append(omitted, "curve")
 		}
-		rows = append(rows, r.object(reflect.ValueOf(key), omitted...)...)
+		if r.summary {
+			rows = append(rows, r.selected(reflect.ValueOf(key), "id", "source", "format", "algorithm", "bits")...)
+			if key.Algorithm == "ECDSA" {
+				rows = append(rows, r.selected(reflect.ValueOf(key), "curve")...)
+			}
+		} else {
+			rows = append(rows, r.object(reflect.ValueOf(key), omitted...)...)
+		}
 		rows = append(rows, r.messages(key.Limitations)...)
 		r.block(fmt.Sprintf("%s / %s [%d]", label(r.t, "local"), label(r.t, "keys"), i), rows)
 	}
@@ -369,41 +423,92 @@ func renderTable(out *bytes.Buffer, d Document, width int) error {
 	if len(d.Local.Pairs) > 0 {
 		rows := []row{}
 		for _, pair := range d.Local.Pairs {
-			rows = append(rows, row{pair.KeyID, pair.CertificateID})
+			certificateID := pair.CertificateID
+			if r.summary {
+				for i, c := range d.Local.Certificates {
+					if c.Info.ID == certificateID {
+						certificateID = fmt.Sprintf("%s [%d]", label(r.t, "certificates"), i)
+						break
+					}
+				}
+			}
+			rows = append(rows, row{pair.KeyID, certificateID})
 		}
 		r.block(label(r.t, "pair_table"), rows)
 	}
-	certificates := []PublicCertificate{}
-	for _, c := range d.Local.Certificates {
-		certificates = append(certificates, c.Info)
-	}
-	for _, remote := range d.Remote {
-		certificates = append(certificates, remote.Certificates...)
-	}
-	seen := map[string][]PublicCertificate{}
-	for i, c := range certificates {
-		duplicate := false
-		if c.ID != "" {
-			for _, previous := range seen[c.ID] {
-				if reflect.DeepEqual(previous, c) {
-					duplicate = true
-					break
+	if !r.summary {
+		certificates := []PublicCertificate{}
+		for _, c := range d.Local.Certificates {
+			certificates = append(certificates, c.Info)
+		}
+		for _, remote := range d.Remote {
+			certificates = append(certificates, remote.Certificates...)
+		}
+		seen := map[string][]PublicCertificate{}
+		for i, c := range certificates {
+			duplicate := false
+			if c.ID != "" {
+				for _, previous := range seen[c.ID] {
+					if reflect.DeepEqual(previous, c) {
+						duplicate = true
+						break
+					}
 				}
 			}
+			if duplicate {
+				continue
+			}
+			seen[c.ID] = append(seen[c.ID], c)
+			omitted := []string{}
+			if c.PublicKeyCurve == nil && c.PublicKeyAlgorithm != "ECDSA" {
+				omitted = append(omitted, "public_key_curve")
+			}
+			r.block(fmt.Sprintf("%s [%d]", label(r.t, "certificates"), i), r.object(reflect.ValueOf(c), omitted...))
 		}
-		if duplicate {
-			continue
-		}
-		seen[c.ID] = append(seen[c.ID], c)
-		omitted := []string{}
-		if c.PublicKeyCurve == nil && c.PublicKeyAlgorithm != "ECDSA" {
-			omitted = append(omitted, "public_key_curve")
-		}
-		r.block(fmt.Sprintf("%s [%d]", label(r.t, "certificates"), i), r.object(reflect.ValueOf(c), omitted...))
+		metadata := r.object(reflect.ValueOf(d.Tool))
+		metadata = append(metadata, row{label(r.t, "generated_at"), d.GeneratedAt})
+		r.block(label(r.t, "tool"), metadata)
 	}
-	metadata := r.object(reflect.ValueOf(d.Tool))
-	metadata = append(metadata, row{label(r.t, "generated_at"), d.GeneratedAt})
-	r.block(label(r.t, "tool"), metadata)
 	r.block(r.text("diagnostics"), r.diagnostics)
+	if r.summary {
+		fmt.Fprintln(r.out, r.text("detail_hint"))
+	}
 	return r.err
+}
+
+// selected 依欄位白名單選擇摘要，不以值為空或字面內容推測是否重要。
+func (r *tableReport) selected(v reflect.Value, names ...string) []row {
+	allowed := map[string]bool{}
+	for _, name := range names {
+		allowed[name] = true
+	}
+	omitted := []string{}
+	for i := 0; i < v.NumField(); i++ {
+		name := v.Type().Field(i).Tag.Get("json")
+		if !allowed[name] {
+			omitted = append(omitted, name)
+		}
+	}
+	return r.object(v, omitted...)
+}
+
+func (r *tableReport) certificateSummary(c PublicCertificate) []row {
+	rows := r.selected(reflect.ValueOf(c), "subject", "public_key_algorithm", "public_key_bits", "not_after", "expired", "expiring_soon")
+	if c.PublicKeyAlgorithm == "ECDSA" {
+		rows = append(rows, r.selected(reflect.ValueOf(c), "public_key_curve")...)
+	}
+	if c.NotAfter != nil {
+		rows = append(rows, r.selected(reflect.ValueOf(c), "remaining_days")...)
+	} else {
+		rows = append(rows, row{label(r.t, "remaining_days"), label(r.t, "unknown")})
+	}
+	return rows
+}
+
+func tableStatus(t *i18n.Translator, status string) string {
+	switch status {
+	case "passed", "failed", "not_performed":
+		return t.Text("status."+status, nil)
+	}
+	return status
 }

@@ -53,7 +53,7 @@ func TestTableFrameUsesSameContractInBothEnvironments(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^(TestTableFramePreservesWidthValuesAndGlobalPolicy|TestTableGridKeepsColumnsAndWhitespace)$", "-test.v")
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^(TestTableFramePreservesWidthValuesAndGlobalPolicy|TestTableGridKeepsColumnsAndWhitespace|TestSummaryScopesAndWidths)$", "-test.v")
 			for _, v := range os.Environ() {
 				if !strings.HasPrefix(v, "RUNEWIDTH_EASTASIAN=") {
 					cmd.Env = append(cmd.Env, v)
@@ -61,7 +61,7 @@ func TestTableFrameUsesSameContractInBothEnvironments(t *testing.T) {
 			}
 			cmd.Env = append(cmd.Env, "RUNEWIDTH_EASTASIAN="+mode)
 			out, err := cmd.CombinedOutput()
-			if err != nil || !strings.Contains(string(out), "--- PASS: TestTableFramePreservesWidthValuesAndGlobalPolicy") || !strings.Contains(string(out), "--- PASS: TestTableGridKeepsColumnsAndWhitespace") || strings.Contains(string(out), "SKIP") {
+			if err != nil || !strings.Contains(string(out), "--- PASS: TestTableFramePreservesWidthValuesAndGlobalPolicy") || !strings.Contains(string(out), "--- PASS: TestTableGridKeepsColumnsAndWhitespace") || !strings.Contains(string(out), "--- PASS: TestSummaryScopesAndWidths") || strings.Contains(string(out), "SKIP") {
 				t.Fatalf("雙環境回歸未具名通過：%v\n%s", err, out)
 			}
 		})

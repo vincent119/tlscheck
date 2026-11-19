@@ -105,7 +105,7 @@ func TestCLIRealLocalPairingAndContinue(t *testing.T) {
 			return check.RemoteResult{Target: target}
 		}
 		for _, bad := range []bool{false, true} {
-			args := []string{key, "example.com", cert, "second.example"}
+			args := []string{"--detail=full", key, "example.com", cert, "second.example"}
 			want := 0
 			if bad {
 				args = append(args, filepath.Join(root, "missing.pem"))
@@ -161,7 +161,7 @@ func TestCLIUntrustedCertificateURIsDoNotLeakCredentials(t *testing.T) {
 	a.Now = func() time.Time { return now }
 	a.Load = func(context.Context) config.Result { return config.Result{Config: config.Config{Language: "zh-TW"}} }
 	var out, diag bytes.Buffer
-	if code := a.Run(context.Background(), []string{path}, &out, &diag); code != 1 {
+	if code := a.Run(context.Background(), []string{"--detail=full", path}, &out, &diag); code != 1 {
 		t.Fatalf("非信任憑證應回傳1：%d", code)
 	}
 	for _, bad := range []string{"synthetic-secret", "user:", "token=hidden", "#fragment"} {

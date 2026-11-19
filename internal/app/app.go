@@ -114,7 +114,7 @@ func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer)
 		return 2
 	}
 	var buf bytes.Buffer
-	if err := report.Render(&buf, options.Format, document); err != nil {
+	if err := report.RenderWithOptions(&buf, options.Format, document, report.RenderOptions{Detail: report.Detail(options.Detail)}); err != nil {
 		return diagnosticError(diagnostics, t, "cli.output_failed")
 	}
 	if destination != nil {

@@ -17,7 +17,7 @@ func TestCLIActualTLSAndFailureContinuation(t *testing.T) {
 	a := New()
 	a.Load = func(context.Context) config.Result { return config.Result{Config: config.Config{Language: "en"}} }
 	var out, diag bytes.Buffer
-	code := a.Run(context.Background(), []string{server.URL + "/private?secret=hidden", server.URL}, &out, &diag)
+	code := a.Run(context.Background(), []string{"--detail=full", server.URL + "/private?secret=hidden", server.URL}, &out, &diag)
 	if code != 1 {
 		t.Fatal(code, out.String(), diag.String())
 	}

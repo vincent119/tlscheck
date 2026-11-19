@@ -23,8 +23,34 @@ type section struct {
 	Rows  []row
 }
 
+// Detail 只控制 table 顯示，不改變報告資料或檢查行為。
+type Detail string
+
+const (
+	// DetailSummary 省略一般明細，完整保留問題與限制。
+	DetailSummary Detail = "summary"
+	// DetailFull 保留所有安全公開明細。
+	DetailFull Detail = "full"
+)
+
+// RenderOptions 的零值使用 table 摘要，不進入 JSON 契約。
+type RenderOptions struct{ Detail Detail }
+
 // Render 先完成記憶體序列化，再輸出，避免格式錯誤留下半份文件。
 func Render(out io.Writer, format string, d Document) error {
+	// 保留既有呼叫者的完整輸出；CLI 以明確選項採用預設摘要。
+	return RenderWithOptions(out, format, d, RenderOptions{Detail: DetailFull})
+}
+
+// RenderWithOptions 在寫入前驗證顯示選項，非 table 格式維持原序列化。
+func RenderWithOptions(out io.Writer, format string, d Document, options RenderOptions) error {
+	if options.Detail == "" {
+		options.Detail = DetailSummary
+	}
+	if options.Detail != DetailSummary && options.Detail != DetailFull {
+		return errors.New("無效的詳細程度")
+	}
+
 	var buf bytes.Buffer
 	if format == "json" {
 		e := json.NewEncoder(&buf)
@@ -33,7 +59,7 @@ func Render(out io.Writer, format string, d Document) error {
 			return err
 		}
 	} else if format == "table" {
-		if err := renderTable(&buf, d, 80); err != nil {
+		if err := renderTableDetail(&buf, d, 80, options.Detail); err != nil {
 			return err
 		}
 	} else {

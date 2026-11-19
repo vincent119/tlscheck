@@ -337,7 +337,7 @@
   "flag.help": "顯示說明",
   "flag.version": "顯示版本",
   "flag.no-descriptions": "省略補全描述",
-  "cli.flags_help": "  --remote / -r  遠端 TLS 目標（可重複）\n  --local / -l  本機憑證或私鑰檔案（可重複）\n  --language / -L  語系：en | zh-TW | zh-CN\n  --format / -f  報告格式：table | json | html | markdown（預設 table）\n  --output / -o  報告路徑，- 代表 stdout（預設 -）\n  --timeout / -t  每目標總逾時：1ms–5m（預設 10s）\n  --expiry-warning-days  到期提醒天數：0–36500（預設 30，0 停用提醒）\n  --overwrite  允許覆寫既有報告，須指定 --output PATH\n  --settings / -s  互動語系與 theme 設定\n  --help / -h  顯示說明\n  --version / -V  顯示版本\n  --  其後全部視為位置輸入",
+  "cli.flags_help": "  --remote / -r  遠端 TLS 目標（可重複）\n  --local / -l  本機憑證或私鑰檔案（可重複）\n  --language / -L  語系：en | zh-TW | zh-CN\n  --format / -f  報告格式：table | json | html | markdown（預設 table）\n  --detail  表格詳細程度：summary | full（預設 summary，僅影響 table）\n  --output / -o  報告路徑，- 代表 stdout（預設 -）\n  --timeout / -t  每目標總逾時：1ms–5m（預設 10s）\n  --expiry-warning-days  到期提醒天數：0–36500（預設 30，0 停用提醒）\n  --overwrite  允許覆寫既有報告，須指定 --output PATH\n  --settings / -s  互動語系與 theme 設定\n  --help / -h  顯示說明\n  --version / -V  顯示版本\n  --  其後全部視為位置輸入",
   "document.public_key_fingerprint_sha256": "公鑰 SHA-256 指紋",
   "document.fingerprint_sha256": "SHA-256 指紋",
   "cli.syntax_help": "多個輸入可重複 -r／-l，其餘旗標不可重複。說明／版本僅可搭配語系；settings 為獨立動作。選單說明：--settings --help。",
@@ -387,5 +387,8 @@
   "table.check_status": "狀態",
   "table.check_description": "說明",
   "table.diagnostics": "診斷明細",
-  "table.scope": "統計範圍"
+  "table.scope": "統計範圍",
+  "flag.detail": "表格詳細程度：summary | full（預設 summary，僅影響 table）",
+  "table.detail_hint": "完整明細請使用 --detail full",
+  "table.single_scope_note": "全域統計包含共用檢查。"
 }

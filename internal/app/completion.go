@@ -20,7 +20,7 @@ func completionCommand(o *RunOptions) *cobra.Command {
 	root.ValidArgsFunction = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveDefault
 	}
-	values := map[string][]string{"language": {"en", "zh-TW", "zh-CN"}, "format": {"table", "json", "html", "markdown"}, "timeout": {"500ms", "1s", "5s", "10s", "30s", "1m"}, "expiry-warning-days": {"0", "7", "14", "30", "60", "90"}}
+	values := map[string][]string{"language": {"en", "zh-TW", "zh-CN"}, "format": {"table", "json", "html", "markdown"}, "detail": {"summary", "full"}, "timeout": {"500ms", "1s", "5s", "10s", "30s", "1m"}, "expiry-warning-days": {"0", "7", "14", "30", "60", "90"}}
 	for name, items := range values {
 		_ = root.RegisterFlagCompletionFunc(name, func(_ *cobra.Command, _ []string, prefix string) ([]string, cobra.ShellCompDirective) {
 			matches := []string{}
@@ -43,7 +43,7 @@ func completionCommand(o *RunOptions) *cobra.Command {
 		_ = root.RegisterFlagCompletionFunc(name, cobra.NoFileCompletions)
 	}
 	for _, query := range []string{"help", "version", "settings"} {
-		for _, general := range []string{"remote", "local", "format", "output", "timeout", "expiry-warning-days", "overwrite"} {
+		for _, general := range []string{"remote", "local", "format", "detail", "output", "timeout", "expiry-warning-days", "overwrite"} {
 			root.MarkFlagsMutuallyExclusive(query, general)
 		}
 	}

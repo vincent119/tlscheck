@@ -337,7 +337,7 @@
   "flag.help": "显示帮助",
   "flag.version": "显示版本",
   "flag.no-descriptions": "省略补全描述",
-  "cli.flags_help": "  --remote / -r  远程 TLS 目标（可重复）\n  --local / -l  本地证书或私钥文件（可重复）\n  --language / -L  语言：en | zh-TW | zh-CN\n  --format / -f  报告格式：table | json | html | markdown（默认 table）\n  --output / -o  报告路径，- 代表 stdout（默认 -）\n  --timeout / -t  每目标总超时：1ms–5m（默认 10s）\n  --expiry-warning-days  到期提醒天数：0–36500（默认 30，0 停用提醒）\n  --overwrite  允许覆盖已有报告，须指定 --output PATH\n  --settings / -s  交互语言与 theme 设置\n  --help / -h  显示帮助\n  --version / -V  显示版本\n  --  之后全部视为位置输入",
+  "cli.flags_help": "  --remote / -r  远程 TLS 目标（可重复）\n  --local / -l  本地证书或私钥文件（可重复）\n  --language / -L  语言：en | zh-TW | zh-CN\n  --format / -f  报告格式：table | json | html | markdown（默认 table）\n  --detail  表格详细程度：summary | full（默认 summary，仅影响 table）\n  --output / -o  报告路径，- 代表 stdout（默认 -）\n  --timeout / -t  每目标总超时：1ms–5m（默认 10s）\n  --expiry-warning-days  到期提醒天数：0–36500（默认 30，0 停用提醒）\n  --overwrite  允许覆盖已有报告，须指定 --output PATH\n  --settings / -s  交互语言与 theme 设置\n  --help / -h  显示帮助\n  --version / -V  显示版本\n  --  之后全部视为位置输入",
   "document.public_key_fingerprint_sha256": "公钥 SHA-256 指纹",
   "document.fingerprint_sha256": "SHA-256 指纹",
   "cli.syntax_help": "多个输入可重复 -r／-l，其余选项不可重复。帮助／版本仅可搭配语言；settings 为独立操作。菜单帮助：--settings --help。",
@@ -387,5 +387,8 @@
   "table.check_status": "状态",
   "table.check_description": "说明",
   "table.diagnostics": "诊断明细",
-  "table.scope": "统计范围"
+  "table.scope": "统计范围",
+  "flag.detail": "表格详细程度：summary | full（默认 summary，仅影响 table）",
+  "table.detail_hint": "完整明细请使用 --detail full",
+  "table.single_scope_note": "全局统计包含共用检查。"
 }

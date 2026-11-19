@@ -15,7 +15,7 @@ import (
 // RunOptions 是 CLI 與檢查編排之間的 typed 契約。
 type RunOptions struct {
 	Inputs                             []model.InputSpec
-	Language, Format, Output           string
+	Language, Format, Output, Detail   string
 	Timeout                            time.Duration
 	ExpiryWarningDays                  int
 	Overwrite, Help, Version, Settings bool
@@ -46,6 +46,7 @@ func rootCommand(o *RunOptions) *cobra.Command {
 	f.StringArrayP("local", "l", nil, "本機憑證或私鑰檔案")
 	f.StringVarP(&o.Language, "language", "L", "", "en | zh-TW | zh-CN")
 	f.StringVarP(&o.Format, "format", "f", "table", "table | json | html | markdown")
+	f.StringVar(&o.Detail, "detail", "summary", "summary | full（僅影響 table）")
 	f.StringVarP(&o.Output, "output", "o", "-", "報告目的地（- 為 stdout）")
 	f.DurationVarP(&o.Timeout, "timeout", "t", 10*time.Second, "每個遠端目標總逾時（1ms–5m）")
 	f.IntVar(&o.ExpiryWarningDays, "expiry-warning-days", 30, "到期提醒天數（0–36500）")
@@ -69,6 +70,9 @@ func parseOptions(args []string) (RunOptions, error) {
 	}
 	f := c.Flags()
 	if f.Changed("language") && o.Language != "en" && o.Language != "zh-TW" && o.Language != "zh-CN" {
+		return o, errArguments
+	}
+	if o.Detail != "summary" && o.Detail != "full" {
 		return o, errArguments
 	}
 	if o.Format != "table" && o.Format != "json" && o.Format != "html" && o.Format != "markdown" || o.Output == "" || o.Timeout < time.Millisecond || o.Timeout > 5*time.Minute || o.ExpiryWarningDays < 0 || o.ExpiryWarningDays > 36500 || o.Overwrite && o.Output == "-" {
@@ -161,7 +165,7 @@ func parseOptions(args []string) (RunOptions, error) {
 		if len(o.Inputs) > 0 {
 			return o, errArguments
 		}
-		for _, name := range []string{"remote", "local", "format", "output", "overwrite", "timeout", "expiry-warning-days"} {
+		for _, name := range []string{"remote", "local", "format", "detail", "output", "overwrite", "timeout", "expiry-warning-days"} {
 			if f.Changed(name) {
 				return o, errArguments
 			}
