@@ -108,6 +108,8 @@ JSON 為單一 UTF-8 物件、兩空格縮排及檔尾換行，固定 `schema_ve
 
 `completion` 是保留的輔助子命令。檢查同名主機可用 `-r completion` 或 `-- completion`，同名檔案可用 `-l completion`。`completion SHELL --help`／`-h` 顯示該層說明。隱藏補全不回顯原始錯誤；生成腳本的偵錯函式不寫檔，`BASH_COMP_DEBUG_FILE` 不會啟用寫入。補全不連線、不讀設定或憑證內容；檔名補全可列舉目錄。Bash 須先載入與其版本相容的 bash-completion，提供 `_get_comp_words_by_ref`／`_init_completion`；僅 source 產生的腳本不足以補齊此 shell 依賴。目前本機缺少該套件，Bash 只完成腳本語法與協定驗證。
 
+2026-11-19 本機驗收：macOS Zsh 5.9 的 10 項真正 Tab 案例通過，包含等號、短旗標及空白／Unicode 檔名。macOS PowerShell 7.5.2 已通過 30 項原生補全引擎驗收，涵蓋含描述／不含描述腳本。無候選且禁止檔名回退時，回傳保留已有字詞的占位；空游標處可能多一個空白，不增加參數或回退檔名，`--local`／`--output` 的正常檔名補全保留。Windows PowerShell 引擎與 Console 實機互動仍待驗證。
+
 四種 shell 皆支援 `--no-descriptions` 及 `-L`／`--language`，不接受一般檢查旗標。
 
 ```sh

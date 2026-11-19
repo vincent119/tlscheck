@@ -185,6 +185,12 @@ func (a App) completion(ctx context.Context, args []string, out, diagnostics io.
 	if err != nil {
 		return true, 2
 	}
+	if shells[0] == "powershell" {
+		cleaned, err = withPowerShellEmptyCandidates(cleaned)
+		if err != nil {
+			return true, 2
+		}
+	}
 	if _, err = io.WriteString(out, cleaned); err != nil {
 		return true, 2
 	}

@@ -108,6 +108,8 @@ JSON is one UTF-8 object with two-space indentation and a final newline, using i
 
 `completion` is a reserved helper command. Use `-r completion` or `-- completion` for that hostname, or `-l completion` for that filename. `completion SHELL --help`/`-h` shows shell-level help. Hidden completion never echoes raw errors; generated debug functions do not write files, and `BASH_COMP_DEBUG_FILE` does not enable writing. Completion never connects or reads configuration/certificate contents; filename completion may enumerate directories. Bash requires a compatible bash-completion package to be loaded, providing `_get_comp_words_by_ref`/`_init_completion`; sourcing the generated script alone does not supply this shell dependency. This machine lacks that package, so Bash evidence covers syntax and protocol only.
 
+Local acceptance on 2026-11-19: macOS Zsh 5.9 passed 10 actual Tab cases, including equals syntax, short flags, and filenames with spaces/Unicode. macOS PowerShell 7.5.2 passed 30 native completion-engine checks across scripts with and without descriptions. When no candidates are available and file fallback is forbidden, a placeholder preserves the existing word; an empty cursor position may gain one space, without adding arguments or falling back to filenames. Normal `--local`/`--output` filename completion is retained. The Windows PowerShell engine and real Console interaction remain unverified.
+
 All four shells accept `--no-descriptions` and `-L`/`--language`, but no execution flags.
 
 ```sh

@@ -40,7 +40,9 @@ tlscheck --version
 
 封裝前執行 README 的 Go 測試、race、vet 與空白檢查指令。測試資料維持合成，私有輸入不放入追蹤檔案。自動測試不使用公開服務，但 TLS 測試需要能綁定 loopback 連接埠。
 
-上述 CI 已在 macOS arm64／amd64 與 Windows amd64 執行 Go 測試、race、vet、27 項 Python 回歸、原生 CLI 版本檢查，以及 snapshot 隔離安裝／同版本重裝與設定保留檢查。darwin/windows × amd64/arm64 四目標均完成建置與 SHA-256 核對；Windows arm64 僅交叉建置。Windows 真實 Console 操作、Bash 載入相容補全套件後互動、Fish 語法與互動、Zsh 真正 Tab、Windows PowerShell 補全與 Homebrew／Scoop 安裝升級仍缺驗收紀錄。
+上述 CI 已在 macOS arm64／amd64 與 Windows amd64 執行 Go 測試、race、vet、27 項 Python 回歸、原生 CLI 版本檢查，以及 snapshot 隔離安裝／同版本重裝與設定保留檢查。darwin/windows × amd64/arm64 四目標均完成建置與 SHA-256 核對；Windows arm64 僅交叉建置。Windows 真實 Console 操作、Bash 載入相容補全套件後互動、Fish 語法與互動、Windows PowerShell 補全與 Homebrew／Scoop 安裝升級仍缺驗收紀錄。
+
+2026-11-19 本機驗收補充：Zsh 5.9 的 10 項真正 Tab 補全通過，包含旗標／值、等號、`--`、停止條件及空白／Unicode 檔名；補全只呼叫隱藏協定，設定及 debug sentinel 不變。macOS CLI／PTY 的 5 項方向鍵／語系／主題預覽／Esc／Ctrl+C／取消驗收通過，stdout 空白，退出 0，終端設定欄位復原，實際 config 不變。儲存僅由隔離測試驗證，沒有對使用者設定做儲存。PowerShell 7.5.2 的無候選相容性已在本機修正：含描述／不含描述的原生引擎共 30 項驗收通過；Go 回歸另驗證等號、引號、游標中段與 AST 參數不變。無候選的占位保留已有字詞，空游標可多一個空白，不增加參數或回退檔名；正常 local／output 檔名補全保留。生成器對未知模板停止輸出，不使用私有反射或升級依賴。Windows 引擎／Console 仍需實機驗證，不能將先前 CI 通過當成此次修正的 Windows 證據。Bash 缺相容 bash-completion，Fish 未安裝，兩者完整互動均未通過。
 
 ## 發佈準備與失敗重試邊界
 
