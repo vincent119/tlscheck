@@ -29,6 +29,8 @@ jobs:
         with:
           go-version: '1.27.4'
       - name: 格式與靜態檢查
+        env:
+          PYTHONPATH: ${{ github.workspace }}/scripts
         run: |
           test -z "$(gofmt -l cmd internal)"
           go vet ./...

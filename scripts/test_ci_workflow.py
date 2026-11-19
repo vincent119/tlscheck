@@ -8,6 +8,32 @@ import unittest
 
 
 class WorkflowToolTests(unittest.TestCase):
+    def test_native_python_tests_load_without_inherited_module_paths(self):
+        text = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
+        native = text.split('\n  native:\n', 1)[1].split('\n  html-acceptance:\n', 1)[0]
+        step = native.split('      - name: 格式與靜態檢查\n', 1)[1].split('      - ', 1)[0]
+        path = re.search(r'^          PYTHONPATH: (.+)$', step, re.MULTILINE)
+        env = dict(os.environ)
+        env.pop('PYTHONPATH', None)
+        if path:
+            env['PYTHONPATH'] = path[1].replace('${{ github.workspace }}', str(Path.cwd()))
+        # 子程序只載入測試，不執行，避免此回歸遞迴呼叫自己。
+        source = '''import sys, unittest
+loader = unittest.TestLoader()
+suite = loader.loadTestsFromNames(sys.argv[1:])
+if loader.errors:
+    raise SystemExit("\\n".join(loader.errors))
+assert suite.countTestCases() > 0, '未載入任何測試'
+'''
+        tests = sorted('.'.join(p.with_suffix('').parts) for p in Path('scripts').glob('test_*.py')
+                       if p.name != 'test_html_acceptance.py')
+        result = subprocess.run([sys.executable, '-B', '-c', source, *tests],
+                                env=env, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0,
+                         'CI 啟動方式無法載入相鄰模組：\n' + result.stderr.decode('utf-8'))
+        self.assertIsNotNone(path, '模組路徑必須明確設定於原生檢查步驟')
+        self.assertEqual(path[1], '${{ github.workspace }}/scripts')
+
     def test_html_checks_fail_independently_of_native_tests(self):
         text = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
         jobs = dict(re.findall(r'^  ([a-z-]+):\n(.*?)(?=^  [a-z-]+:|\Z)',
