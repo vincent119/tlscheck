@@ -60,6 +60,7 @@ On failure, record the source commit, intended version, failed stage and artifac
 | Windows amd64 native tests, race detection, DACL/read-only replacement, CLI version | Passed CI |
 | Isolated snapshot installation/same-version reinstallation and configuration preservation on three native targets | Passed CI; upgrades between published versions unverified |
 | Four-target snapshot archives and SHA-256 | Passed CI; not officially published; Windows arm64 is cross-build only |
+| Named PowerShell main/subcase PASS without Skip | Verified six normal/race JSON files across three platforms; see evidence below |
 | Real Console and full interactive shell completion | Pending; see development-validation scope |
 | Homebrew tap / Scoop bucket owners and repositories | Confirmed; no remote writes performed |
 | Homebrew/Scoop installation, cross-version upgrades and configuration preservation | Not verified |
@@ -79,7 +80,15 @@ Each native job attempts to upload `go-test-events-<matrix.os>` on success or fa
 python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
 ```
 
-This gate has passed local macOS validation. The workflow changes have not been pushed, so no new hosted named events are available. Package success in CI 44452386656 cannot prove that both subcases ran without Skip. Windows hosted named results, real Console/keyboard Tab, and settings-menu acceptance remain pending.
+Verified [CI 44454812073, attempt 2](https://github.com/vincent119/tlscheck/actions/runs/44454812073/attempts/2), at commit `9e7bc08118ed1ef0d441872cf2ea26c690c972d2`, with all four jobs successful. After downloading the three `go-test-events-<matrix.os>` artifacts, each of the six JSONL files was independently checked again:
+
+| Native platform | Normal tests | Race tests |
+|---|---|---|
+| macOS arm64 (macos-15) | Main test and both subcases PASS, no Skip | Main test and both subcases PASS, no Skip |
+| macOS amd64 (macos-15-intel) | Main test and both subcases PASS, no Skip | Main test and both subcases PASS, no Skip |
+| Windows amd64 (windows-2025) | Main test and both subcases PASS, no Skip | Main test and both subcases PASS, no Skip |
+
+All 18 required named passes have preceding `run` events and completed package `pass` events, with no Skip in the main test subtree. The first macOS amd64 attempt failed on Go proxy DNS; successful events were obtained after the rerun. Closure relies on raw JSON, not package success in the older CI 44452386656. This completes the cross-platform engine portion of S09-T10. Real Windows Console/keyboard Tab, the settings menu, and other outstanding shell acceptance checks remain pending, so S09-T10 and S09 as a whole remain open.
 
 ## Command references
 

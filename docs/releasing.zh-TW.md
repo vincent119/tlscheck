@@ -60,6 +60,7 @@ GitHub Actions CI 與 GoReleaser v2.14.3 的四目標試建置已通過上述遠
 | Windows amd64 原生測試、race、DACL／唯讀替換、CLI 版本 | CI 已通過 |
 | 三個原生目標的 snapshot 隔離安裝／同版本重裝、設定保留 | CI 已通過，未驗證跨正式版本升級 |
 | 四目標 snapshot 壓縮檔與 SHA-256 | CI 已通過，未正式發佈；Windows arm64 僅交叉建置 |
+| PowerShell 主測試及兩子案例具名 PASS、未 Skip | 三平台普通／race 六份 JSON 已核對，詳見下方證據 |
 | 真實 Console 與完整 shell 補全互動 | 仍待驗收，詳見開發驗證範圍 |
 | Homebrew tap／Scoop bucket owner 與 repository | 已確認，未寫入遠端 |
 | Homebrew／Scoop 安裝、跨版本升級及設定保留 | 未驗證 |
@@ -79,7 +80,15 @@ GitHub Actions CI 與 GoReleaser v2.14.3 的四目標試建置已通過上述遠
 python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
 ```
 
-此閘門已完成 macOS 本機驗證；本次 workflow 尚未推送，尚無新 hosted CI 具名事件。既有 CI 44452386656 的套件成功記錄不足以證明兩子案例未 Skip。Windows hosted 具名結果、真實 Console／鍵盤 Tab 與設定選單仍待驗收。
+已核對 [CI 44454812073 第二次執行](https://github.com/vincent119/tlscheck/actions/runs/44454812073/attempts/2)，來源 commit 為 `9e7bc08118ed1ef0d441872cf2ea26c690c972d2`，四個 jobs 均成功。下載三份 `go-test-events-<matrix.os>` 產物後，重新以檢查器逐份驗證六個 JSONL，結果如下：
+
+| 原生平台 | 普通測試 | race 測試 |
+|---|---|---|
+| macOS arm64（macos-15） | 主測試及兩子案例均 PASS，未 Skip | 主測試及兩子案例均 PASS，未 Skip |
+| macOS amd64（macos-15-intel） | 主測試及兩子案例均 PASS，未 Skip | 主測試及兩子案例均 PASS，未 Skip |
+| Windows amd64（windows-2025） | 主測試及兩子案例均 PASS，未 Skip | 主測試及兩子案例均 PASS，未 Skip |
+
+共 18 個必要具名 PASS，各自有先行 `run` 與套件完成 `pass`，主測試子樹無 Skip。第一次執行的 macOS amd64 因 Go proxy DNS 失敗，重跑後才取得成功事件；本次依原始 JSON 結案，不以舊 CI 44452386656 的套件成功記錄推定未 Skip。這些證據完成了 S09-T10 的跨平台引擎分項；真實 Windows Console／鍵盤 Tab、設定選單與其他尚缺實機的 shell 驗收仍未完成，S09-T10 與整份 S09 不因此整體結案。
 
 ## 指令參考
 
