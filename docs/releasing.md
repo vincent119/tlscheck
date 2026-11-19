@@ -67,6 +67,20 @@ On failure, record the source commit, intended version, failed stage and artifac
 
 Update this guide and its Chinese counterpart together when actual packaging and installation evidence becomes available. Do not mark distribution instructions complete solely because a command template exists.
 
+### Named PowerShell test evidence
+
+Native CI separately runs `go test -json -count=1 ./...` and `go test -race -json -count=1 ./...`, using `pipefail` and `tee` to preserve events and Go failures. Before testing, it checks that `pwsh` runs and prints its version; it does not install it automatically.
+
+`scripts/check_go_test_events.py` verifies each JSONL independently. In the exact package `github.com/vincent119/tlscheck/internal/app`, `TestPowerShellEmptyCandidatesDoNotFallbackToFiles`, `/包含描述`, and `/不含描述` must each have `run` followed by `pass`, with a completed package `pass`. Skips within the main test subtree, any test/build failure, missing events, duplicate or out-of-order events, malformed UTF-8/JSON, and size-limit violations fail verification. Package `ok` or PASS in output text cannot replace structured events.
+
+Each native job attempts to upload `go-test-events-<matrix.os>` on success or failure, containing only `go-test.jsonl` and `go-test-race.jsonl`, retained for seven days. Early failures may leave no event files; that is not a passing verification. After downloading, run from the repository root:
+
+```bash
+python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
+```
+
+This gate has passed local macOS validation. The workflow changes have not been pushed, so no new hosted named events are available. Package success in CI 44452386656 cannot prove that both subcases ran without Skip. Windows hosted named results, real Console/keyboard Tab, and settings-menu acceptance remain pending.
+
 ## Command references
 
 Template syntax was checked against the official [Homebrew tap documentation](https://docs.brew.sh/Taps), [Homebrew command reference](https://docs.brew.sh/Manpage), [Scoop buckets](https://github.com/ScoopInstaller/Scoop/wiki/Buckets) and [Scoop commands](https://github.com/ScoopInstaller/Scoop/wiki/Commands). This does not verify any tlscheck package or installation.
@@ -131,7 +145,7 @@ Certificate SAN URIs are displayed individually. Hierarchical URI identity paths
 
 ## CLI compatibility update
 
-See [README](../README.md) for table-default reporting, four formats and protected output, forced local/remote inputs, language overrides, settings and four-shell completion. Ordinary commands still never write configuration; explicit settings save is the exception. Automated Windows amd64 ACL/commit regressions passed; real Windows Console operation and full interactive shell completion still need acceptance testing. Windows arm64 is cross-build only. This documentation update does not modify CI or create a release.
+See [README](../README.md) for table-default reporting, four formats and protected output, forced local/remote inputs, language overrides, settings and four-shell completion. Ordinary commands still never write configuration; explicit settings save is the exception. Automated Windows amd64 ACL/commit regressions passed; real Windows Console operation and full interactive shell completion still need acceptance testing. Windows arm64 is cross-build only. Official publishing still requires separate authorization.
 
 The eight CLI review fixes have regression coverage for completion debug writes, empty flag values, shell help, terminal disconnect, ACL preservation/failure cleanup, advice codes, table delimiters, and per-input summaries. macOS ACL handling uses bounded native attribute calls; CLI runtime does not depend on chmod/Python, which are test tools only. Windows DACL, read-only atomic replacement, and failure-cleanup regressions passed in the Windows amd64 CI run above; this does not validate every Windows/filesystem combination.
 

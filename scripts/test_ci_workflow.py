@@ -8,6 +8,28 @@ import unittest
 
 
 class WorkflowToolTests(unittest.TestCase):
+    def test_native_requires_fresh_named_powershell_passes_and_keeps_events(self):
+        text = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
+        native = text.split('\n  packages:\n', 1)[0]
+        self.assertIn('pwsh -NoProfile -NonInteractive', native, 'CI 必須確認 PowerShell 可執行')
+        self.assertIn('set -o pipefail', native, 'tee 不得遮蔽 Go 失敗')
+        for flags, file in [('-json', 'go-test.jsonl'), ('-race -json', 'go-test-race.jsonl')]:
+            self.assertIn('go test ' + flags + ' -count=1 ./... | tee ' + file, native,
+                          '普通與 race 必須保留新鮮 JSON 事件')
+            self.assertIn('set -o pipefail\n          go test ' + flags, native,
+                          '每個測試步驟都必須保留 Go 失敗結束碼')
+        command = 'python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl'
+        self.assertIn(command, native, '必須分別驗證普通與 race 的必要具名結果')
+        steps = re.findall(r'^      - .*?(?=^      - |\Z)', native, re.MULTILINE | re.DOTALL)
+        uploads = [step for step in steps if 'name: go-test-events-${{ matrix.os }}' in step]
+        self.assertEqual(len(uploads), 1, '每個平台必須保留唯一測試事件產物')
+        upload = uploads[0]
+        self.assertIn('uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02', upload)
+        self.assertRegex(upload, r'(?m)^        if: always\(\)$', '失敗也必須保留原始事件')
+        self.assertRegex(upload, r'(?m)^          path: \|\n            go-test\.jsonl\n            go-test-race\.jsonl\n',
+                         '只允許上傳指定事件，不得整個 workspace 打包')
+        self.assertIn('retention-days: 7', upload)
+
     def test_python_environment_supports_chinese_streams(self):
         for workflow in ['ci.yml', 'release.yml']:
             with self.subTest(workflow=workflow):

@@ -28,14 +28,33 @@ jobs:
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: '1.27.4'
-      - name: 格式、靜態檢查與原生測試
+      - name: 格式與靜態檢查
         run: |
           test -z "$(gofmt -l cmd internal)"
           go vet ./...
-          go test ./...
-          go test -race ./...
           git diff --check
           python3 -B -m unittest discover -s scripts -v
+      - name: 確認 PowerShell 引擎
+        run: pwsh -NoProfile -NonInteractive -Command "\$PSVersionTable.PSVersion.ToString()"
+      - name: 原生測試 JSON 事件
+        run: |
+          set -o pipefail
+          go test -json -count=1 ./... | tee go-test.jsonl
+      - name: Race 測試 JSON 事件
+        run: |
+          set -o pipefail
+          go test -race -json -count=1 ./... | tee go-test-race.jsonl
+      - name: PowerShell 具名通過與禁止跳過
+        run: python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: go-test-events-${{ matrix.os }}
+          path: |
+            go-test.jsonl
+            go-test-race.jsonl
+          retention-days: 7
+          if-no-files-found: warn
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: snapshot-archives

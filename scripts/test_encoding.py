@@ -21,7 +21,7 @@ class EncodingTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, '-B', '-X', 'utf8=0', '-X', 'warn_default_encoding',
              '-W', 'error::EncodingWarning', '-m', 'unittest', '-q',
-             'test_ci_workflow', 'test_release',
+             'test_ci_workflow', 'test_release', 'test_go_test_events',
              'test_encoding.EncodingTests.test_installation_text_boundaries_use_utf8',
              'test_encoding.EncodingTests.test_lint_text_boundaries_use_utf8'],
             env=env, capture_output=True, timeout=60,

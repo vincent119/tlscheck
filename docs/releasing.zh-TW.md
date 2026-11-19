@@ -67,6 +67,20 @@ GitHub Actions CI 與 GoReleaser v2.14.3 的四目標試建置已通過上述遠
 
 取得真實封裝及安裝證據後，同步更新本文件與英文版本。不能因為已有命令模板，就將發佈說明標為完成。
 
+### PowerShell 具名測試證據
+
+原生 CI 分別執行 `go test -json -count=1 ./...` 與 `go test -race -json -count=1 ./...`，使用 `pipefail` 與 `tee` 保存事件並保留 Go 的失敗結果。測試前確認 `pwsh` 可執行並輸出版本，不自動安裝。
+
+`scripts/check_go_test_events.py` 分別驗證兩份 JSONL：固定套件 `github.com/vincent119/tlscheck/internal/app` 的 `TestPowerShellEmptyCandidatesDoNotFallbackToFiles`、`/包含描述` 與 `/不含描述` 必須各有 `run` 後接 `pass`，且套件完成 `pass`。主測試子樹不得 Skip；任何測試／建置失敗、缺事件、重複或順序錯誤、損壞 UTF-8／JSON、超過大小上限均使檢查失敗。套件 `ok` 或輸出文字中的 PASS 不能代替事件。
+
+每個原生 job 無論成功或失敗，均嘗試上傳 `go-test-events-<matrix.os>`，僅包含 `go-test.jsonl` 與 `go-test-race.jsonl`，保留 7 天。早期步驟失敗時可能沒有事件檔，不能當成驗證通過。下載後從 repository 根目錄執行：
+
+```bash
+python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
+```
+
+此閘門已完成 macOS 本機驗證；本次 workflow 尚未推送，尚無新 hosted CI 具名事件。既有 CI 44452386656 的套件成功記錄不足以證明兩子案例未 Skip。Windows hosted 具名結果、真實 Console／鍵盤 Tab 與設定選單仍待驗收。
+
 ## 指令參考
 
 模板語法已對照官方 [Homebrew tap 文件](https://docs.brew.sh/Taps)、[Homebrew 指令參考](https://docs.brew.sh/Manpage)、[Scoop bucket 文件](https://github.com/ScoopInstaller/Scoop/wiki/Buckets) 與 [Scoop 指令](https://github.com/ScoopInstaller/Scoop/wiki/Commands)。這不代表 tlscheck 套件或安裝已完成驗證。
@@ -131,7 +145,7 @@ $env:PYTHONIOENCODING = 'utf-8'
 
 ## CLI 相容性更新
 
-參數與輸出以 [README](../README.zh-TW.md) 為準：預設 table，新增四格式／安全 output、強制 local/remote、語系覆寫、settings 與四 shell 補全。一般操作仍不寫設定；僅 settings 明確儲存例外。Windows amd64 的自動化 ACL／提交回歸已通過；真實 Windows Console 與完整 shell 補全互動仍待驗收。Windows arm64 僅交叉建置。本次文件同步不修改 CI 或建立發佈。
+參數與輸出以 [README](../README.zh-TW.md) 為準：預設 table，新增四格式／安全 output、強制 local/remote、語系覆寫、settings 與四 shell 補全。一般操作仍不寫設定；僅 settings 明確儲存例外。Windows amd64 的自動化 ACL／提交回歸已通過；真實 Windows Console 與完整 shell 補全互動仍待驗收。Windows arm64 僅交叉建置。正式發佈仍需獨立授權。
 
 八項 CLI 審查修正已加入回歸：補全偵錯無寫入、空旗標值、shell help、終端斷線、ACL 保存／失敗清理、advice code、table 分隔符及逐輸入摘要。macOS ACL 透過固定 SDK 的有界原生屬性呼叫處理，CLI 不依賴外部 chmod／Python；測試才使用這些工具。Windows DACL、唯讀原子替換與失敗清理回歸已在上述 Windows amd64 CI 通過；這不代表所有 Windows／檔案系統組合均已驗證。
 
