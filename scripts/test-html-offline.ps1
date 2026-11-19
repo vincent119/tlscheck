@@ -195,7 +195,9 @@ function Get-HTMLPortClosure([int]$Port, [int]$TimeoutMilliseconds = 5000) {
         $tcp=[Net.Sockets.TcpClient]::new()
         try {
             $connect=$tcp.ConnectAsync('127.0.0.1',$Port)
-            if ($connect.Wait(500)) {
+            # 使用剩餘總預算，避免 Windows 尚未回報拒絕連線就被反覆取消。
+            $remaining=[Math]::Max(1,$TimeoutMilliseconds-[int]$clock.ElapsedMilliseconds)
+            if ($connect.Wait($remaining)) {
                 $null=$connect.GetAwaiter().GetResult()
                 $observations.Add(@{Status='仍可連線'})
             } else { $observations.Add(@{Status='連線等待逾時，不能證明已關閉'}) }

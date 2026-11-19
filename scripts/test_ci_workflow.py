@@ -8,6 +8,26 @@ import unittest
 
 
 class WorkflowToolTests(unittest.TestCase):
+    def test_html_checks_fail_independently_of_native_tests(self):
+        text = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
+        jobs = dict(re.findall(r'^  ([a-z-]+):\n(.*?)(?=^  [a-z-]+:|\Z)',
+                               text.split('jobs:\n', 1)[1], re.MULTILINE | re.DOTALL))
+        self.assertIn('html-acceptance', jobs, 'HTML 驗收必須有獨立工作')
+        native, html = jobs['native'], jobs['html-acceptance']
+        self.assertIn('needs: packages', native)
+        self.assertNotIn('html-acceptance', native, 'HTML 失敗不得阻擋核心測試')
+        self.assertNotIn('needs:', html, 'HTML 驗收必須可獨立執行')
+        self.assertIn('macos-15, macos-15-intel, windows-2025', html)
+        self.assertIn('fail-fast: false', html)
+        self.assertIn('pwsh -NoProfile -NonInteractive', html)
+        self.assertIn('python3 -B -m unittest -v scripts/test_html_acceptance.py', html)
+        self.assertIn('"$file" != scripts/test_html_acceptance.py', native,
+                      '核心工作必須排除已獨立執行的 HTML 回歸')
+        self.assertIn('python3 -B -m unittest -v "${tests[@]}"', native,
+                      '其他腳本回歸仍須執行')
+        self.assertNotRegex(native + html, r'continue-on-error|\|\|\s*true',
+                            '不得隱藏任一工作的失敗')
+
     def test_native_requires_fresh_named_powershell_passes_and_keeps_events(self):
         text = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
         native = text.split('\n  packages:\n', 1)[0]

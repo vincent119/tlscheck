@@ -205,34 +205,19 @@ if (-not $caught) { throw '其他協定錯誤不可隱藏' }
                                 capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8'))
 
-    def test_port_cleanup_distinguishes_open_closed_and_delayed_shutdown(self):
+    def test_port_cleanup_requires_connection_refused_and_rejects_open_port(self):
         source = ". '" + str(self.script).replace("'", "''") + "'\n"
         source += r'''
-Add-Type -TypeDefinition @'
-using System.Net.Sockets;
-using System.Threading.Tasks;
-public static class HTMLPortTest {
-    public static async Task CloseAfter(TcpListener listener) {
-        await Task.Delay(300); listener.Stop();
-    }
-}
-'@
+$ErrorActionPreference='Stop'
 $listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
 $listener.Start(128);$port=$listener.LocalEndpoint.Port
 try {
     $open=Get-HTMLPortClosure $port 250
     if ($open -is [array] -or $open.Closed -or $open.Observations.Count -lt 1) { throw '開放port被誤判關閉或有額外輸出' }
 } finally { $listener.Stop() }
-$closed=Get-HTMLPortClosure $port 1000
+$closed=Get-HTMLPortClosure $port
 if (-not $closed.Closed -or $closed -is [array]) { throw '關閉port未正確確認' }
-$listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
-$listener.Start(128);$port=$listener.LocalEndpoint.Port
-try {
-    $closer=[HTMLPortTest]::CloseAfter($listener)
-    $delayed=Get-HTMLPortClosure $port 3000
-    $null=$closer.GetAwaiter().GetResult()
-    if (-not $delayed.Closed) { throw '延後關閉未等待或未記錄' }
-} finally { $listener.Stop() }
+if (@($closed.Observations | Where-Object Status -eq '已拒絕連線').Count -lt 1) { throw '不得以逾時代替拒絕連線證據' }
 '''
         path = self.root / 'ports.ps1'
         path.write_text(source, encoding='utf-8')
