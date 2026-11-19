@@ -3,6 +3,9 @@ module github.com/vincent119/tlscheck
 go 1.27.0
 
 require (
+	github.com/jedib0t/go-pretty/v6 v6.9.2
+	github.com/mattn/go-runewidth v0.0.16
+	github.com/rivo/uniseg v0.4.7
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0

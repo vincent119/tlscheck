@@ -376,5 +376,16 @@
   "display.check.connection": "TCP 连接",
   "display.check.handshake": "TLS 握手",
   "display.check.revocation": "撤销检查",
-  "display.check.aia": "AIA 签发者获取"
+  "display.check.aia": "AIA 签发者获取",
+  "table.global_checks": "全局检查（共用检查仅计一次）",
+  "table.applicable_checks": "此输入适用检查",
+  "table.shared_checks": "共用／全局检查",
+  "table.scope_note": "逐输入检查可能重叠，不可直接相加为全局总数。",
+  "table.empty_fields": "无数据字段",
+  "table.none": "无",
+  "table.check_item": "检查项目",
+  "table.check_status": "状态",
+  "table.check_description": "说明",
+  "table.diagnostics": "诊断明细",
+  "table.scope": "统计范围"
 }

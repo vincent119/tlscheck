@@ -376,5 +376,16 @@
   "display.check.connection": "TCP 連線",
   "display.check.handshake": "TLS 握手",
   "display.check.revocation": "撤銷檢查",
-  "display.check.aia": "AIA 簽發者擷取"
+  "display.check.aia": "AIA 簽發者擷取",
+  "table.global_checks": "全域檢查（共用檢查僅計一次）",
+  "table.applicable_checks": "此輸入適用檢查",
+  "table.shared_checks": "共用／全域檢查",
+  "table.scope_note": "逐輸入檢查可能重疊，不可直接相加為全域總數。",
+  "table.empty_fields": "無資料欄位",
+  "table.none": "無",
+  "table.check_item": "檢查項目",
+  "table.check_status": "狀態",
+  "table.check_description": "說明",
+  "table.diagnostics": "診斷明細",
+  "table.scope": "統計範圍"
 }

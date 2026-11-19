@@ -376,5 +376,16 @@
   "display.check.connection": "TCP connection",
   "display.check.handshake": "TLS handshake",
   "display.check.revocation": "Revocation check",
-  "display.check.aia": "AIA issuer retrieval"
+  "display.check.aia": "AIA issuer retrieval",
+  "table.global_checks": "Global checks (unique outcomes)",
+  "table.applicable_checks": "Applicable checks for this input",
+  "table.shared_checks": "Shared / global checks",
+  "table.scope_note": "Per-input counts may overlap; do not add them to obtain global totals.",
+  "table.empty_fields": "No values",
+  "table.none": "None",
+  "table.check_item": "Check item",
+  "table.check_status": "Status",
+  "table.check_description": "Description",
+  "table.diagnostics": "Diagnostic details",
+  "table.scope": "Counting scope"
 }

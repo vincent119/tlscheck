@@ -32,6 +32,10 @@ func Render(out io.Writer, format string, d Document) error {
 		if err := e.Encode(d); err != nil {
 			return err
 		}
+	} else if format == "table" {
+		if err := renderTable(&buf, d, 80); err != nil {
+			return err
+		}
 	} else {
 		t := i18n.New(d.Language)
 		grids := humanGrids(d, t)
@@ -45,22 +49,6 @@ func Render(out io.Writer, format string, d Document) error {
 			sections = append(sections, s)
 		}
 		switch format {
-		case "table":
-			for _, g := range grids {
-				writeGrid(&buf, g)
-			}
-			for _, s := range sections {
-				fmt.Fprintln(&buf, s.Title)
-				border := "+" + strings.Repeat("-", 30) + "+" + strings.Repeat("-", 74) + "+"
-				fmt.Fprintln(&buf, border)
-				tableRow(&buf, label(t, "field"), label(t, "value"))
-				fmt.Fprintln(&buf, border)
-				for _, r := range s.Rows {
-					tableRow(&buf, r.Label, r.Value)
-				}
-				fmt.Fprintln(&buf, border)
-				fmt.Fprintln(&buf)
-			}
 		case "markdown":
 			for _, g := range grids {
 				fmt.Fprintf(&buf, "## %s\n\n", markdown(g.Title))
