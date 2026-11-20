@@ -11,7 +11,7 @@ class WorkflowToolTests(unittest.TestCase):
     def test_native_python_tests_load_without_inherited_module_paths(self):
         text = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
         native = text.split('\n  native:\n', 1)[1].split('\n  html-acceptance:\n', 1)[0]
-        step = native.split('      - name: 格式與靜態檢查\n', 1)[1].split('      - ', 1)[0]
+        step = native.split('      - name: Formatting and static checks\n', 1)[1].split('      - ', 1)[0]
         path = re.search(r'^          PYTHONPATH: (.+)$', step, re.MULTILINE)
         env = dict(os.environ)
         env.pop('PYTHONPATH', None)
@@ -128,7 +128,7 @@ assert suite.countTestCases() > 0, '未載入任何測試'
         text = Path('.github/workflows/release.yml').read_text(encoding='utf-8')
         self.assertRegex(text, r'(?m)^      update_packages:\n(?:        [^\n]*\n)*        default: false$',
                          '套件更新必須有預設關閉的手動選項')
-        update = text.split('      - name: 成功發佈後更新穩定套件\n', 1)[1]
+        update = text.split('      - name: Update stable packages after successful release publication\n', 1)[1]
         self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.update_packages == true", update,
                       'tag發佈不得自動寫入Homebrew或Scoop')
         self.assertIn('python3 scripts/release.py update --tag "$RELEASE_TAG" --execute', update)
