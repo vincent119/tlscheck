@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 // RunOptions 是 CLI 與檢查編排之間的 typed 契約。
 type RunOptions struct {
 	Inputs                             []model.InputSpec
+	PasswordFiles, AskPasswords        []string
+	Passwords                          map[int]passwordBinding
 	Language, Format, Output, Detail   string
 	Timeout                            time.Duration
 	ExpiryWarningDays                  int
@@ -44,6 +47,8 @@ func rootCommand(o *RunOptions) *cobra.Command {
 	f := c.Flags()
 	f.StringArrayP("remote", "r", nil, "遠端 TLS 目標")
 	f.StringArrayP("local", "l", nil, "本機憑證或私鑰檔案")
+	f.StringArrayVar(&o.PasswordFiles, "password-file", nil, "密碼檔 INDEX=PATH（可重複）")
+	f.StringArrayVar(&o.AskPasswords, "ask-password", nil, "隱藏輸入密碼 INDEX（可重複）")
 	f.StringVarP(&o.Language, "language", "L", "", "en | zh-TW | zh-CN")
 	f.StringVarP(&o.Format, "format", "f", "table", "table | json | html | markdown")
 	f.StringVar(&o.Detail, "detail", "summary", "summary | full（僅影響 table）")
@@ -61,7 +66,7 @@ func parseOptions(args []string) (RunOptions, error) {
 	var o RunOptions
 	c := rootCommand(&o)
 	c.Flags().VisitAll(func(f *pflag.Flag) {
-		if f.Name != "remote" && f.Name != "local" {
+		if !repeatableFlag(f.Name) {
 			f.Value = &countedValue{Value: f.Value, boolean: f.NoOptDefVal != ""}
 		}
 	})
@@ -160,12 +165,15 @@ func parseOptions(args []string) (RunOptions, error) {
 			break
 		}
 	}
+	if err := bindPasswords(&o); err != nil {
+		return o, err
+	}
 	query := o.Help || o.Version || o.Settings
 	if query {
 		if len(o.Inputs) > 0 {
 			return o, errArguments
 		}
-		for _, name := range []string{"remote", "local", "format", "detail", "output", "overwrite", "timeout", "expiry-warning-days"} {
+		for _, name := range []string{"remote", "local", "format", "detail", "password-file", "ask-password", "output", "overwrite", "timeout", "expiry-warning-days"} {
 			if f.Changed(name) {
 				return o, errArguments
 			}
@@ -249,4 +257,50 @@ func diagnosticLanguage(args []string) string {
 		return language
 	}
 	return "en"
+}
+
+type passwordBinding struct {
+	path string
+	ask  bool
+}
+
+func repeatableFlag(name string) bool {
+	return name == "remote" || name == "local" || name == "password-file" || name == "ask-password"
+}
+func bindPasswords(o *RunOptions) error {
+	o.Passwords = map[int]passwordBinding{}
+	add := func(raw string, b passwordBinding) error {
+		if raw == "" {
+			return errArguments
+		}
+		for _, c := range raw {
+			if c < '0' || c > '9' {
+				return errArguments
+			}
+		}
+		index, err := strconv.Atoi(raw)
+		if err != nil || index >= len(o.Inputs) || o.Inputs[index].Kind == model.RemoteInput {
+			return errArguments
+		}
+		if _, exists := o.Passwords[index]; exists {
+			return errArguments
+		}
+		o.Passwords[index] = b
+		return nil
+	}
+	for _, raw := range o.PasswordFiles {
+		index, path, ok := strings.Cut(raw, "=")
+		if !ok || path == "" {
+			return errArguments
+		}
+		if err := add(index, passwordBinding{path: path}); err != nil {
+			return err
+		}
+	}
+	for _, index := range o.AskPasswords {
+		if err := add(index, passwordBinding{ask: true}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

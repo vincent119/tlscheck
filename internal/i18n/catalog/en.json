@@ -337,7 +337,7 @@
   "flag.help": "Show help",
   "flag.version": "Show version",
   "flag.no-descriptions": "Omit completion descriptions",
-  "cli.flags_help": "  --remote / -r  Remote TLS target (repeatable)\n  --local / -l  Local certificate or private-key file (repeatable)\n  --language / -L  Language: en | zh-TW | zh-CN\n  --format / -f  Report: table | json | html | markdown (default table)\n  --detail  Table detail: summary | full (default summary; table only)\n  --output / -o  Report path, or - for stdout (default -)\n  --timeout / -t  Per-target total timeout: 1ms–5m (default 10s)\n  --expiry-warning-days  Expiry warning days: 0–36500 (default 30; 0 disables warnings)\n  --overwrite  Allow replacing an existing report; requires --output PATH\n  --settings / -s  Interactive language and theme settings\n  --help / -h  Show help\n  --version / -V  Show version\n  --  Treat all remaining tokens as positional inputs",
+  "cli.flags_help": "  --remote / -r  Remote TLS target (repeatable)\n  --local / -l  Local certificate or private-key file (repeatable)\n  --password-file  Password file INDEX=PATH (repeatable; zero-based input index)\n  --ask-password  Read a hidden password for INDEX (repeatable; terminal required)\n  --language / -L  Language: en | zh-TW | zh-CN\n  --format / -f  Report: table | json | html | markdown (default table)\n  --detail  Table detail: summary | full (default summary; table only)\n  --output / -o  Report path, or - for stdout (default -)\n  --timeout / -t  Per-target total timeout: 1ms–5m (default 10s)\n  --expiry-warning-days  Expiry warning days: 0–36500 (default 30; 0 disables warnings)\n  --overwrite  Allow replacing an existing report; requires --output PATH\n  --settings / -s  Interactive language and theme settings\n  --help / -h  Show help\n  --version / -V  Show version\n  --  Treat all remaining tokens as positional inputs",
   "document.public_key_fingerprint_sha256": "Public-key SHA-256 fingerprint",
   "document.fingerprint_sha256": "SHA-256 fingerprint",
   "cli.syntax_help": "Repeat -r/-l for multiple inputs; other flags must not repeat. Help/version allow only language; settings is independent. Use --settings --help for menu help.",
@@ -390,5 +390,14 @@
   "table.scope": "Counting scope",
   "flag.detail": "Table detail: summary | full (default summary; table only)",
   "table.detail_hint": "Full details: --detail full",
-  "table.single_scope_note": "Global counts include shared checks."
+  "table.single_scope_note": "Global counts include shared checks.",
+  "input.container_unsupported": "The certificate container uses an unsupported format, algorithm, or object combination.",
+  "input.container_integrity_failed": "The container integrity check or decryption failed; the password may be incorrect or the file damaged.",
+  "input.container_resource_limit": "The certificate container exceeds the supported resource limits.",
+  "input.password_unavailable": "The password could not be read securely. Use a private regular file or an explicitly requested terminal prompt.",
+  "input.password_not_applicable": "The selected input is not a supported PFX container; its password source was not read.",
+  "input.password_unsupported": "The password encoding or characters are unsupported; this version accepts BMP characters only.",
+  "cli.password_prompt": "Password for input {{.Index}} (hidden): ",
+  "flag.password-file": "Password file INDEX=PATH (repeatable; zero-based input index)",
+  "flag.ask-password": "Read a hidden password for INDEX (repeatable; terminal required)"
 }

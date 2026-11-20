@@ -61,19 +61,25 @@ func (k ParsedKey) GoString() string { return k.String() }
 type IssueCode string
 
 const (
-	InvalidTarget     IssueCode = "input.invalid_target"
-	UnsupportedScheme IssueCode = "input.unsupported_scheme"
-	InvalidPort       IssueCode = "input.invalid_port"
-	UnsupportedZone   IssueCode = "input.unsupported_zone"
-	FileNotFound      IssueCode = "input.file_not_found"
-	FileUnreadable    IssueCode = "input.file_unreadable"
-	NotRegularFile    IssueCode = "input.not_regular_file"
-	FileTooLarge      IssueCode = "input.file_too_large"
-	InvalidData       IssueCode = "input.invalid_data"
-	UnsupportedBlock  IssueCode = "input.unsupported_block"
-	EncryptedKey      IssueCode = "input.encrypted_key"
-	UnsupportedKey    IssueCode = "input.unsupported_key"
-	Canceled          IssueCode = "input.canceled"
+	InvalidTarget         IssueCode = "input.invalid_target"
+	UnsupportedScheme     IssueCode = "input.unsupported_scheme"
+	InvalidPort           IssueCode = "input.invalid_port"
+	UnsupportedZone       IssueCode = "input.unsupported_zone"
+	FileNotFound          IssueCode = "input.file_not_found"
+	FileUnreadable        IssueCode = "input.file_unreadable"
+	NotRegularFile        IssueCode = "input.not_regular_file"
+	FileTooLarge          IssueCode = "input.file_too_large"
+	InvalidData           IssueCode = "input.invalid_data"
+	UnsupportedBlock      IssueCode = "input.unsupported_block"
+	EncryptedKey          IssueCode = "input.encrypted_key"
+	UnsupportedKey        IssueCode = "input.unsupported_key"
+	Canceled              IssueCode = "input.canceled"
+	ContainerUnsupported  IssueCode = "input.container_unsupported"
+	ContainerIntegrity    IssueCode = "input.container_integrity_failed"
+	ContainerLimit        IssueCode = "input.container_resource_limit"
+	PasswordUnavailable   IssueCode = "input.password_unavailable"
+	PasswordNotApplicable IssueCode = "input.password_not_applicable"
+	PasswordUnsupported   IssueCode = "input.password_unsupported"
 )
 
 // Issue 為輸入或執行錯誤，由 CLI 在 S06 統一對應結束碼 2。

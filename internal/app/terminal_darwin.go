@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func terminal(in, out *os.File) (func(context.Context) (string, error), func() error, error) {
+func terminalBytes(in, out *os.File) (func(context.Context, bool) (byte, error), func() error, error) {
 	before, err := unix.IoctlGetTermios(int(in.Fd()), unix.TIOCGETA)
 	if err != nil {
 		return nil, nil, err
@@ -69,5 +69,5 @@ func terminal(in, out *os.File) (func(context.Context) (string, error), func() e
 			return 0, io.EOF
 		}
 	}
-	return keyReader(read), restore, nil
+	return read, restore, nil
 }

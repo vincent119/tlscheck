@@ -51,7 +51,7 @@ func inspectKey(ctx context.Context, parsed model.ParsedKey) (KeyResult, []byte)
 		return result, nil
 	}
 	switch parsed.Format {
-	case "PKCS#1", "PKCS#8", "SEC1":
+	case "PKCS#1", "PKCS#8", "SEC1", "PKCS#12":
 		result.Info.Format = parsed.Format
 	default:
 		result.Validation = failed("key.unsupported_format", ExecutionFailure)
@@ -126,7 +126,7 @@ func inspectKey(ctx context.Context, parsed model.ParsedKey) (KeyResult, []byte)
 		public = &key.PublicKey
 	case ed25519.PrivateKey:
 		result.Info.Algorithm = "Ed25519"
-		if parsed.Format != "PKCS#8" {
+		if parsed.Format != "PKCS#8" && parsed.Format != "PKCS#12" {
 			result.Validation = failed("key.container_mismatch", ExecutionFailure)
 			return result, nil
 		}

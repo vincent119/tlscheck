@@ -18,11 +18,22 @@ const MaxFileSize = 10 * 1024 * 1024
 
 // Parser 的檔案邊界可於套件測試替換，不保存單一解析狀態。
 type Parser struct {
-	stat func(string) (fs.FileInfo, error)
-	open func(string) (fs.File, error)
+	stat     func(string) (fs.FileInfo, error)
+	open     func(string) (fs.File, error)
+	password PasswordProvider
 }
 
 // NewParser 不搜尋額外檔案，也不建立任何網路連線。
+// PasswordProvider 僅在已辨識 PFX 時取得單次密碼；呼叫者不得寫入報告。
+type PasswordProvider func(context.Context, model.SourceRef) ([]byte, error)
+
+// NewParserWithPasswordProvider 不保存密碼或 context，只保存可替換的私密讀取邊界。
+func NewParserWithPasswordProvider(provider PasswordProvider) *Parser {
+	p := NewParser()
+	p.password = provider
+	return p
+}
+
 func NewParser() *Parser {
 	return &Parser{stat: os.Stat, open: openFile}
 }
@@ -96,7 +107,7 @@ func explicitPath(value string) bool {
 		return true
 	}
 	lower := strings.ToLower(value)
-	for _, suffix := range []string{".pem", ".cer", ".crt", ".key"} {
+	for _, suffix := range []string{".pem", ".cer", ".crt", ".key", ".p7b", ".p7c", ".pfx", ".p12"} {
 		if strings.HasSuffix(lower, suffix) {
 			return true
 		}
@@ -138,7 +149,7 @@ func (p *Parser) readFile(ctx context.Context, path string, source model.SourceR
 		addIssue(result, model.FileTooLarge, source)
 		return
 	}
-	parseData(ctx, data, source, result)
+	parseDataWithPassword(ctx, data, source, result, p.password)
 }
 
 type contextReader struct {

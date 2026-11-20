@@ -36,7 +36,7 @@ func completeRequest(root *cobra.Command, args []string, noDescriptions bool, ou
 	afterDash := false
 	var pending *pflag.Flag
 	set := func(f *pflag.Flag, value string) bool {
-		if used[f.Name] && f.Name != "remote" && f.Name != "local" {
+		if used[f.Name] && !repeatableFlag(f.Name) {
 			return false
 		}
 		if f.Value.Set(value) != nil {
@@ -151,7 +151,7 @@ func completeRequest(root *cobra.Command, args []string, noDescriptions bool, ou
 	if strings.HasPrefix(prefix, "-") {
 		values := []string{}
 		command.Flags().VisitAll(func(f *pflag.Flag) {
-			if f.Hidden || used[f.Name] && f.Name != "remote" && f.Name != "local" {
+			if f.Hidden || used[f.Name] && !repeatableFlag(f.Name) {
 				return
 			}
 			for _, group := range f.Annotations["cobra_annotation_mutually_exclusive"] {

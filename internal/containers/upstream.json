@@ -1,0 +1,16 @@
+{
+  "module": "software.sslmate.com/src/go-pkcs12",
+  "version": "v0.7.4",
+  "commit": "0bb5b30d698b67e51be1462870f57f3e0bfc7067",
+  "module_sum": "h1:OvJ7g/OB9RuVAOzahlFLns6HeIcP+SJotsDqmLfhd8w=",
+  "license": "BSD-3-Clause",
+  "source_hashes": {
+    "pkcs12.go": "fcebcb30eba1b9c89a4cd455a55bf4cf0a67056065502271f9e0f58988497f46",
+    "crypto.go": "ad574b79e615083e43203ef330b42db3c6a1497d04ed8a0a2a16c295e4923ae0",
+    "mac.go": "0a7f0693212da1aca068acfb69e22299b4ff185088d4caf1a998bccc6b3c3702",
+    "pbkdf.go": "2dd5393857f50f3470821e3e2a2aa64f1dbd9edc51c55dd1dfc5f057aa2e1e11",
+    "bmp-string.go": "457207839abffc422ba4a560e0b2924fc7914e52f74a710426a07ad7b3d69d99",
+    "safebags.go": "c624ea9cc071bd4856d356a986c5b896a42294e6d54bdcd3526dbf2cab37ef0a",
+    "LICENSE": "05c9cf1167d0584c9192f73a550a2089547e8366114da257f51279ec6a3fc568"
+  }
+}

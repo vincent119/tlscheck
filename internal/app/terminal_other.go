@@ -8,6 +8,6 @@ import (
 	"os"
 )
 
-func terminal(in, out *os.File) (func(context.Context) (string, error), func() error, error) {
+func terminalBytes(in, out *os.File) (func(context.Context, bool) (byte, error), func() error, error) {
 	return nil, nil, errors.New("本平台未提供互動終端")
 }

@@ -33,6 +33,8 @@ func completionCommand(o *RunOptions) *cobra.Command {
 		})
 	}
 	_ = root.RegisterFlagCompletionFunc("remote", cobra.NoFileCompletions)
+	_ = root.RegisterFlagCompletionFunc("password-file", cobra.NoFileCompletions)
+	_ = root.RegisterFlagCompletionFunc("ask-password", cobra.NoFileCompletions)
 	_ = root.RegisterFlagCompletionFunc("local", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveDefault
 	})
@@ -43,7 +45,7 @@ func completionCommand(o *RunOptions) *cobra.Command {
 		_ = root.RegisterFlagCompletionFunc(name, cobra.NoFileCompletions)
 	}
 	for _, query := range []string{"help", "version", "settings"} {
-		for _, general := range []string{"remote", "local", "format", "detail", "output", "timeout", "expiry-warning-days", "overwrite"} {
+		for _, general := range []string{"remote", "local", "format", "detail", "password-file", "ask-password", "output", "timeout", "expiry-warning-days", "overwrite"} {
 			root.MarkFlagsMutuallyExclusive(query, general)
 		}
 	}

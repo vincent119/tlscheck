@@ -14,10 +14,23 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/vincent119/tlscheck/internal/containers"
 	"github.com/vincent119/tlscheck/internal/model"
 )
 
 func parseData(ctx context.Context, data []byte, source model.SourceRef, result *model.InputResult) {
+	parseDataWithPassword(ctx, data, source, result, nil)
+}
+func parseDataWithPassword(ctx context.Context, data []byte, source model.SourceRef, result *model.InputResult, provider PasswordProvider) {
+	source.Encoding = "DER"
+	switch containers.Kind(data) {
+	case "PKCS#7":
+		parseP7BData(ctx, data, source, result)
+		return
+	case "PKCS#12":
+		parsePFXData(ctx, data, source, result, provider)
+		return
+	}
 	if bytes.Contains(data, []byte("-----BEGIN ")) {
 		source.Encoding = "PEM"
 		parsePEM(ctx, data, source, result)
@@ -67,6 +80,12 @@ func parsePEM(ctx context.Context, data []byte, source model.SourceRef, result *
 			addIssue(result, model.EncryptedKey, source)
 		} else {
 			switch block.Type {
+			case "PKCS7":
+				if len(block.Headers) != 0 {
+					addIssue(result, model.ContainerUnsupported, source)
+				} else {
+					parseP7BData(ctx, block.Bytes, source, result)
+				}
 			case "CERTIFICATE", "RSA PRIVATE KEY", "EC PRIVATE KEY", "PRIVATE KEY":
 				parseDER(block.Bytes, block.Type, source, result)
 			default:

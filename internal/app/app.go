@@ -26,6 +26,7 @@ type App struct {
 	Remote          func(context.Context, model.Target, time.Time) check.RemoteResult
 	Now             func() time.Time
 	Version, Commit string
+	passwordPrompt  func(context.Context, io.Writer, *i18n.Translator, int) ([]byte, error)
 }
 
 // Run 只回傳統一結束碼。
@@ -67,6 +68,11 @@ func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer)
 			return diagnosticError(diagnostics, t, "cli.output_failed")
 		}
 		protected = append(protected, configPath)
+		for _, binding := range options.Passwords {
+			if !binding.ask {
+				protected = append(protected, binding.path)
+			}
+		}
 		destination, err = filetxn.Prepare(ctx, options.Output, options.Overwrite, protected)
 		if err != nil {
 			return diagnosticError(diagnostics, t, "cli.output_failed")
@@ -74,7 +80,7 @@ func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer)
 		defer destination.Close()
 	}
 	now := a.Now().UTC()
-	inputs := a.parseInputs(ctx, options.Inputs)
+	inputs := a.parsePasswordInputs(ctx, options, diagnostics, t)
 	var certs []model.ParsedCertificate
 	var keys []model.ParsedKey
 	for _, item := range inputs {

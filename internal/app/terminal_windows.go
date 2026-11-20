@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func terminal(in, out *os.File) (func(context.Context) (string, error), func() error, error) {
+func terminalBytes(in, out *os.File) (func(context.Context, bool) (byte, error), func() error, error) {
 	ih, oh := windows.Handle(in.Fd()), windows.Handle(out.Fd())
 	var im, om uint32
 	if err := windows.GetConsoleMode(ih, &im); err != nil {
@@ -67,5 +67,5 @@ func terminal(in, out *os.File) (func(context.Context) (string, error), func() e
 			}
 		}
 	}
-	return keyReader(read), restore, nil
+	return read, restore, nil
 }
