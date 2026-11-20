@@ -27,6 +27,7 @@ func (r *tableReport) text(key string) string { return r.t.Text("table."+key, ni
 type tableCheck struct {
 	check  Check
 	source *Source
+	owners []string
 }
 
 func (r *tableReport) grid(headers []string, data [][]string, widths []int) {
@@ -95,6 +96,12 @@ func (r *tableReport) block(title string, rows []row) {
 		if c.Name == "issues" {
 			name = label(r.t, "issues")
 		}
+		checkName := name
+		ownerTitle := title
+		if len(entry.owners) > 0 {
+			ownerTitle = strings.Join(entry.owners, ", ")
+			name += " / " + ownerTitle
+		}
 		// 只省略明確無問題的成功敘述；未知狀態與任何建議保守保留。
 		if r.summary && result.Status == "passed" && result.Severity == "none" && result.Advice == nil {
 			checks = append(checks, []string{name, tableStatus(r.t, result.Status), ""})
@@ -110,7 +117,7 @@ func (r *tableReport) block(title string, rows []row) {
 			description += "; " + label(r.t, "advice") + ": " + result.Advice.Message
 		}
 		checks = append(checks, []string{"[" + id + "] " + name, tableStatus(r.t, result.Status), description})
-		r.diagnostics = append(r.diagnostics, row{"[" + id + "]", title + " / " + name}, row{label(r.t, "severity"), displayValue(r.t, "severity", result.Severity)})
+		r.diagnostics = append(r.diagnostics, row{"[" + id + "]", ownerTitle + " / " + checkName}, row{label(r.t, "severity"), displayValue(r.t, "severity", result.Severity)})
 		if result.Code != "" {
 			r.diagnostics = append(r.diagnostics, row{label(r.t, "code"), result.Code})
 		}
@@ -152,7 +159,11 @@ func (r *tableReport) object(v reflect.Value, omit ...string) []row {
 	rows := []row{}
 	empty := []string{}
 	for i := 0; i < v.NumField(); i++ {
-		name := v.Type().Field(i).Tag.Get("json")
+		tag := strings.Split(v.Type().Field(i).Tag.Get("json"), ",")
+		name := tag[0]
+		if len(tag) > 1 && tag[1] == "omitempty" && v.Field(i).IsZero() {
+			continue
+		}
 		if skipped[name] {
 			continue
 		}
@@ -324,6 +335,9 @@ func renderTableDetail(out *bytes.Buffer, d Document, width int, detail Detail) 
 		if input.LocalSource != nil {
 			rows = append(rows, row{label(r.t, "local_source"), *input.LocalSource})
 		}
+		if input.ListSource != nil {
+			rows = append(rows, row{label(r.t, "list_source") + " / " + label(r.t, "path"), input.ListSource.Path}, row{label(r.t, "list_source") + " / " + label(r.t, "line"), strconv.Itoa(input.ListSource.Line)})
+		}
 		if v, ok := views[input.Index]; ok {
 			rows = append(rows, row{label(r.t, "result"), r.t.Text("status."+v.Status, nil)})
 			if !r.summary || v.HighestSeverity != "none" {
@@ -344,9 +358,18 @@ func renderTableDetail(out *bytes.Buffer, d Document, width int, detail Detail) 
 	for _, remote := range d.Remote {
 		checks := append([]Check{}, remote.Checks...)
 		checks = append(checks, remote.Trust.Checks...)
+		if remote.Comparison != nil {
+			checks = append(checks, Check{Name: "comparison", Result: remote.Comparison.Result})
+		}
 		rows := r.checks(checks)
 		rows = append(rows, r.issues(remote.Issues)...)
+		if remote.Comparison != nil {
+			rows = append(rows, r.object(reflect.ValueOf(*remote.Comparison), "result")...)
+		}
 		if r.summary {
+			if remote.Connection != nil {
+				rows = append(rows, r.object(reflect.ValueOf(*remote.Connection))...)
+			}
 			if remote.TLS != nil {
 				rows = append(rows, r.selected(reflect.ValueOf(*remote.TLS), "version", "cipher_suite")...)
 			} else {
@@ -365,7 +388,7 @@ func renderTableDetail(out *bytes.Buffer, d Document, width int, detail Detail) 
 				rows = append(rows, row{label(r.t, "certificates"), label(r.t, "unknown")})
 			}
 		} else {
-			rows = append(rows, r.object(reflect.ValueOf(remote), "input_index", "target", "certificates", "checks", "trust", "limitations", "issues")...)
+			rows = append(rows, r.object(reflect.ValueOf(remote), "input_index", "target", "certificates", "checks", "trust", "limitations", "issues", "comparison")...)
 			for i, c := range remote.Certificates {
 				rows = append(rows, row{fmt.Sprintf("%s [%d]", label(r.t, "certificates"), i), c.ID})
 			}
@@ -375,20 +398,21 @@ func renderTableDetail(out *bytes.Buffer, d Document, width int, detail Detail) 
 		r.block(fmt.Sprintf("%s [%d] %s", label(r.t, "remote"), remote.InputIndex, remote.Target), rows)
 	}
 	// 本機證據依穩定ID引用共同憑證明細，來源／配對／驗證鏈仍逐筆保留。
+	if r.summary {
+		r.compactCertificates(d)
+	}
 	for i, c := range d.Local.Certificates {
+		if r.summary {
+			continue
+		}
 		rows := r.checks(c.Checks)
 		rows = append(rows, r.checks(c.Trust.Checks)...)
 		if c.Pairing != nil {
 			rows = append(rows, r.checks([]Check{{Name: "pairing", Result: *c.Pairing}})...)
 		}
-		if r.summary {
-			rows = append(rows, r.selected(reflect.ValueOf(c), "role", "sources", "matching_keys")...)
-			rows = append(rows, r.certificateSummary(c.Info)...)
-		} else {
-			rows = append(rows, r.object(reflect.ValueOf(c), "info", "checks", "trust", "pairing")...)
-			rows = append(rows, row{label(r.t, "certificate_id"), c.Info.ID})
-			rows = append(rows, r.chains(c.Trust)...)
-		}
+		rows = append(rows, r.object(reflect.ValueOf(c), "info", "checks", "trust", "pairing")...)
+		rows = append(rows, row{label(r.t, "certificate_id"), c.Info.ID})
+		rows = append(rows, r.chains(c.Trust)...)
 		r.block(fmt.Sprintf("%s / %s [%d]", label(r.t, "local"), label(r.t, "certificates"), i), rows)
 	}
 	for i, key := range d.Local.Keys {
@@ -417,7 +441,10 @@ func renderTableDetail(out *bytes.Buffer, d Document, width int, detail Detail) 
 		}
 	}
 	r.block(label(r.t, "local")+" / "+label(r.t, "issues"), r.issues(sourceIssues))
-	shared := r.checks(d.Local.Checks)
+	shared := []row{}
+	if !r.summary || len(d.Local.Certificates) == 0 {
+		shared = r.checks(d.Local.Checks)
+	}
 	shared = append(shared, r.issues(sharedIssues)...)
 	r.block(r.text("shared_checks"), shared)
 	if len(d.Local.Pairs) > 0 {

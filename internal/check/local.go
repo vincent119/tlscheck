@@ -37,6 +37,9 @@ func (r LocalResult) Failure() FailureClass {
 		add(issue)
 	}
 	for _, cert := range r.Certificates {
+		if cert.ExpiryPolicy != nil {
+			add(cert.ExpiryPolicy.Outcome)
+		}
 		for _, outcome := range []Outcome{cert.Parse, cert.Validity, cert.CAConstraints, cert.Linkage, cert.Trust.Outcome, cert.Trust.Hostname, cert.Trust.ServerUsage} {
 			add(outcome)
 		}

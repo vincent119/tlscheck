@@ -139,7 +139,11 @@ func flatten(t *i18n.Translator, v reflect.Value, path string, rows *[]row) {
 	case reflect.Struct:
 		typ := v.Type()
 		for i := 0; i < v.NumField(); i++ {
-			name := typ.Field(i).Tag.Get("json")
+			tag := strings.Split(typ.Field(i).Tag.Get("json"), ",")
+			name := tag[0]
+			if len(tag) > 1 && tag[1] == "omitempty" && v.Field(i).IsZero() {
+				continue
+			}
 			next := label(t, name)
 			if path != "" {
 				next = path + " / " + next
@@ -148,6 +152,8 @@ func flatten(t *i18n.Translator, v reflect.Value, path string, rows *[]row) {
 
 			category := ""
 			switch {
+			case typ == reflect.TypeFor[Difference]() && name == "field":
+				category = "comparison_field"
 			case typ == reflect.TypeFor[Input]() && name == "kind":
 				category = "kind"
 			case name == "severity" && typ == reflect.TypeFor[Result](), name == "highest_severity" && typ == reflect.TypeFor[Summary]():

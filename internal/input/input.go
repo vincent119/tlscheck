@@ -170,6 +170,9 @@ func addIssue(result *model.InputResult, code model.IssueCode, source model.Sour
 
 // ParseSpec 的強制模式不會跨到另一個 I/O 邊界。
 func (p *Parser) ParseSpec(ctx context.Context, spec model.InputSpec) model.InputResult {
+	if spec.Problem != "" {
+		return model.InputResult{InputIndex: spec.Index, Issues: []model.Issue{{Code: spec.Problem, Source: model.SourceRef{InputIndex: spec.Index}}}}
+	}
 	if spec.Kind == model.AutoInput {
 		return p.Parse(ctx, spec.Value, spec.Index)
 	}

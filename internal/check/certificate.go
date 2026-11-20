@@ -80,6 +80,7 @@ type IssuerLink struct {
 
 // CertificateResult 將解析、時間、CA 約束、鏈結與信任分開。
 type CertificateResult struct {
+	ExpiryPolicy  *ExpiryPolicyResult
 	Info          CertificateInfo
 	Role          Role
 	Sources       []model.SourceRef

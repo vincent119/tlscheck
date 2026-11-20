@@ -34,6 +34,9 @@ type RemoteChecker struct {
 
 // RemoteResult 區分實際送出鏈、已驗證鏈及未完成握手的事實。
 type RemoteResult struct {
+	Comparison        *CertificateComparison
+	ConnectionInfo    *ConnectionInfo
+	ExpiryPolicies    []ExpiryPolicyResult
 	Target            model.Target
 	Stage             string
 	DNS               Outcome
@@ -56,8 +59,14 @@ type RemoteResult struct {
 // Failure 不把到期提醒或未執行狀態算成失敗。
 func (r RemoteResult) Failure() FailureClass {
 	var severity FailureClass
+	if r.Comparison != nil {
+		severity = r.Comparison.Outcome.Class
+	}
 	outcomes := []Outcome{r.DNS, r.Connection, r.Handshake, r.Trust.Outcome, r.Trust.Hostname, r.Trust.ServerUsage}
 	outcomes = append(outcomes, r.Issues...)
+	for _, policy := range r.ExpiryPolicies {
+		outcomes = append(outcomes, policy.Outcome)
+	}
 	for _, outcome := range outcomes {
 		if outcome.Class > severity {
 			severity = outcome.Class
@@ -83,9 +92,21 @@ func NewRemoteCheckerWithOptions(now time.Time, provider RootProvider, options R
 }
 
 // Check 僅檢查一個已正規化目標；每次呼叫都有獨立期限。
-func (c *RemoteChecker) Check(ctx context.Context, target model.Target) (result RemoteResult) {
+func (c *RemoteChecker) Check(ctx context.Context, target model.Target) RemoteResult {
+	return c.checkWithIP(ctx, target, nil)
+}
+
+func (c *RemoteChecker) checkWithIP(ctx context.Context, target model.Target, override *netip.Addr) (result RemoteResult) {
 	result = RemoteResult{Stage: "input", DNS: skipped("remote.not_started"), Connection: skipped("remote.not_started"), Handshake: skipped("remote.not_started"), Trust: TrustResult{Outcome: skipped("remote.handshake_incomplete"), Hostname: skipped("remote.handshake_incomplete"), ServerUsage: skipped("remote.handshake_incomplete")}, Revocation: skipped("remote.revocation_not_checked"), AIARetrieval: skipped("remote.aia_not_requested"), PlatformPolicy: "trust.platform_policy_may_apply"}
-	if c.analyzer == nil || c.analyzer.now.IsZero() || c.resolver == nil || c.dial == nil || c.timeout <= 0 {
+	if override != nil {
+		if !override.IsValid() || override.Zone() != "" {
+			result.Issues = append(result.Issues, failed("remote.invalid_connect_ip", ExecutionFailure))
+			return result
+		}
+		result.ConnectionInfo = &ConnectionInfo{RequestedIP: *override}
+		result.DNS = skipped("remote.dns_overridden")
+	}
+	if c.analyzer == nil || c.analyzer.now.IsZero() || (override == nil && c.resolver == nil) || c.dial == nil || c.timeout <= 0 {
 		result.Issues = append(result.Issues, failed("remote.invalid_configuration", ExecutionFailure))
 		return result
 	}
@@ -102,7 +123,9 @@ func (c *RemoteChecker) Check(ctx context.Context, target model.Target) (result 
 	}
 	result.Stage = "dns"
 	addresses := []net.IPAddr{}
-	if address, err := netip.ParseAddr(target.ASCIIHost); err == nil {
+	if override != nil {
+		addresses = append(addresses, net.IPAddr{IP: net.IP(override.AsSlice())})
+	} else if address, err := netip.ParseAddr(target.ASCIIHost); err == nil {
 		addresses = append(addresses, net.IPAddr{IP: net.IP(address.AsSlice())})
 		result.DNS = skipped("remote.dns_not_needed")
 	} else {
@@ -129,6 +152,10 @@ func (c *RemoteChecker) Check(ctx context.Context, target model.Target) (result 
 		return result
 	}
 	result.Connection = passed("remote.connected")
+	if result.ConnectionInfo != nil {
+		result.ConnectionInfo.Connected = true
+		result.ConnectionInfo.PeerAddress = observedPeer(conn.RemoteAddr())
+	}
 	closeConnection := func() {
 		if conn == nil {
 			return

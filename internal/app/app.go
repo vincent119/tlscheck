@@ -4,8 +4,10 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"fmt"
 	"io"
+	"net/netip"
 	"time"
 
 	"github.com/vincent119/tlscheck/internal/check"
@@ -24,6 +26,7 @@ type App struct {
 	Local           func(context.Context, []model.ParsedCertificate, time.Time) check.LocalResult
 	Pair            func(context.Context, []model.ParsedKey, []model.ParsedCertificate) check.PairingResult
 	Remote          func(context.Context, model.Target, time.Time) check.RemoteResult
+	RemoteWithIP    func(context.Context, model.Target, netip.Addr, time.Time) check.RemoteResult
 	Now             func() time.Time
 	Version, Commit string
 	passwordPrompt  func(context.Context, io.Writer, *i18n.Translator, int) ([]byte, error)
@@ -36,6 +39,20 @@ func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer)
 	}
 	options, err := parseOptions(args)
 	if err != nil {
+		return argumentError(out, diagnostics, diagnosticLanguage(args))
+	}
+	if options.BatchMode {
+		if issue := expandTargetLists(ctx, &options); issue != "" {
+			return diagnosticError(diagnostics, i18n.New(diagnosticLanguage(args)), string(issue))
+		}
+		if err := bindPasswords(&options); err != nil {
+			return argumentError(out, diagnostics, diagnosticLanguage(args))
+		}
+	}
+	if err := bindConnectIPs(ctx, &options); err != nil {
+		return argumentError(out, diagnostics, diagnosticLanguage(args))
+	}
+	if err := bindCompareCertificates(ctx, &options); err != nil {
 		return argumentError(out, diagnostics, diagnosticLanguage(args))
 	}
 	cfg := config.Result{Config: config.Config{Language: options.Language, Theme: "normal"}}
@@ -68,6 +85,10 @@ func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer)
 			return diagnosticError(diagnostics, t, "cli.output_failed")
 		}
 		protected = append(protected, configPath)
+		protected = append(protected, options.TargetFiles...)
+		for _, path := range options.CompareCertPaths {
+			protected = append(protected, path)
+		}
 		for _, binding := range options.Passwords {
 			if !binding.ask {
 				protected = append(protected, binding.path)
@@ -79,8 +100,23 @@ func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer)
 		}
 		defer destination.Close()
 	}
+	candidates := map[string]*x509.Certificate{}
+	for _, spec := range options.Inputs {
+		if path, bound := options.CompareCertPaths[spec.Index]; bound {
+			if _, loaded := candidates[path]; !loaded {
+				candidate, issue := input.NewParser().ReadCompareCandidate(ctx, path)
+				if issue != "" {
+					return diagnosticError(diagnostics, t, string(issue))
+				}
+				candidates[path] = candidate
+			}
+		}
+	}
 	now := a.Now().UTC()
 	inputs := a.parsePasswordInputs(ctx, options, diagnostics, t)
+	if !connectTargetsStillRemote(options.ConnectIPs, inputs) || !compareTargetsStillRemote(options.CompareCertPaths, inputs) {
+		return argumentError(out, diagnostics, diagnosticLanguage(args))
+	}
 	var certs []model.ParsedCertificate
 	var keys []model.ParsedKey
 	for _, item := range inputs {
@@ -93,23 +129,49 @@ func (a App) Run(ctx context.Context, args []string, out, diagnostics io.Writer)
 	} else {
 		local = check.NewAnalyzerWithOptions(now, nil, check.CertificateOptions{ExpiryWarningDays: options.ExpiryWarningDays}).AnalyzeLocal(ctx, certs)
 	}
+	if options.FailOnExpiryWarning {
+		local = local.WithExpiryPolicy(options.ExpiryWarningDays)
+	}
 	pairs := a.Pair(ctx, keys, certs)
 	code := max(int(local.Failure()), int(pairs.Failure()))
-	remotes := []check.RemoteResult{}
+	targets := []model.Target{}
 	for _, item := range inputs {
 		if len(item.Issues) > 0 {
 			code = 2
 		}
 		if item.Target != nil {
-			var r check.RemoteResult
-			if a.Remote != nil {
-				r = a.Remote(ctx, *item.Target, now)
-			} else {
-				r = check.NewRemoteCheckerWithOptions(now, nil, check.RemoteOptions{Timeout: options.Timeout, ExpiryWarningDays: options.ExpiryWarningDays}).Check(ctx, *item.Target)
-			}
-			remotes = append(remotes, r)
-			code = max(code, int(r.Failure()))
+			targets = append(targets, *item.Target)
 		}
+	}
+	remotes := runRemoteChecks(ctx, targets, options.Concurrency, func(ctx context.Context, target model.Target) check.RemoteResult {
+		var r check.RemoteResult
+		if ip, mapped := options.ConnectIPs[target.InputIndex]; mapped {
+			if a.RemoteWithIP != nil {
+				r = a.RemoteWithIP(ctx, target, ip, now)
+			} else {
+				r = check.NewRemoteCheckerWithOptions(now, nil, check.RemoteOptions{Timeout: options.Timeout, ExpiryWarningDays: options.ExpiryWarningDays}).CheckWithIP(ctx, target, ip)
+			}
+			r.Target = target
+		} else if a.Remote != nil {
+			r = a.Remote(ctx, target, now)
+		} else {
+			r = check.NewRemoteCheckerWithOptions(now, nil, check.RemoteOptions{Timeout: options.Timeout, ExpiryWarningDays: options.ExpiryWarningDays}).Check(ctx, target)
+		}
+		if options.FailOnExpiryWarning {
+			r = r.WithExpiryPolicy(options.ExpiryWarningDays)
+		}
+		return r
+	})
+	for i := range remotes {
+		if path, bound := options.CompareCertPaths[targets[i].InputIndex]; bound {
+			remotes[i] = remotes[i].WithCertificateComparison(path, candidates[path])
+		}
+		if ip, mapped := options.ConnectIPs[targets[i].InputIndex]; mapped && remotes[i].ConnectionInfo == nil {
+			remotes[i].ConnectionInfo = &check.ConnectionInfo{RequestedIP: ip}
+		}
+	}
+	for _, r := range remotes {
+		code = max(code, int(r.Failure()))
 	}
 	if ctx.Err() != nil {
 		code = 2

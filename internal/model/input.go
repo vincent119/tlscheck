@@ -106,14 +106,23 @@ type InputResult struct {
 type InputKind string
 
 const (
-	AutoInput   InputKind = "auto"
-	RemoteInput InputKind = "remote"
-	LocalInput  InputKind = "local"
+	AutoInput       InputKind = "auto"
+	RemoteInput     InputKind = "remote"
+	LocalInput      InputKind = "local"
+	TargetListInput InputKind = "targets_file"
 )
+
+// TargetListSource 只保留清單位置，Line為0表示整份清單的問題。
+type TargetListSource struct {
+	Path string
+	Line int
+}
 
 // InputSpec 保留每次出現的順序，不以內容去重。
 type InputSpec struct {
-	Kind  InputKind
-	Value string
-	Index int
+	Kind       InputKind
+	Value      string
+	Index      int
+	ListSource *TargetListSource
+	Problem    IssueCode
 }

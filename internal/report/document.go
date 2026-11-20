@@ -40,12 +40,19 @@ type Source struct {
 	Encoding   string `json:"encoding"`
 }
 
+// ListSource保留清單路徑與實際行號，0代表整份清單問題。
+type ListSource struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
+}
+
 // Input 保留出現順序，無效遠端不回顯原始輸入。
 type Input struct {
-	Index       int     `json:"index"`
-	Kind        string  `json:"kind"`
-	Target      *string `json:"target"`
-	LocalSource *string `json:"local_source"`
+	Index       int         `json:"index"`
+	Kind        string      `json:"kind"`
+	Target      *string     `json:"target"`
+	LocalSource *string     `json:"local_source"`
+	ListSource  *ListSource `json:"list_source,omitempty"`
 }
 
 // Result 使用固定代碼與本地化訊息，不保存底層錯誤。
@@ -173,8 +180,17 @@ type TLS struct {
 	CipherSuiteID uint16 `json:"cipher_suite_id"`
 }
 
+// Connection 只在顯式IP映射時提供要求值與已觀測的連線事實。
+type Connection struct {
+	RequestedIP string  `json:"requested_ip"`
+	Connected   bool    `json:"connected"`
+	PeerAddress *string `json:"peer_address"`
+}
+
 // Remote 不接收本機金鑰，未觀測 TLS 使用 nil。
 type Remote struct {
+	Comparison        *Comparison         `json:"comparison,omitempty"`
+	Connection        *Connection         `json:"connection,omitempty"`
 	InputIndex        int                 `json:"input_index"`
 	Target            string              `json:"target"`
 	Stage             string              `json:"stage"`
@@ -269,11 +285,13 @@ func (b *builder) outcome(o check.Outcome) Result {
 		switch {
 		case strings.HasPrefix(o.Code, "remote."):
 			advice = "advice.check_network"
+		case strings.HasPrefix(o.Code, "comparison."):
+			advice = "advice.check_deployment"
 		case strings.HasPrefix(o.Code, "pairing."):
 			advice = "advice.check_pair"
 		case strings.Contains(o.Code, "hostname"):
 			advice = "advice.check_hostname"
-		case strings.Contains(o.Code, "expired") || strings.Contains(o.Code, "not_yet_valid"):
+		case strings.Contains(o.Code, "expired") || strings.Contains(o.Code, "not_yet_valid") || o.Code == check.ExpiryWarningFailureCode:
 			advice = "advice.replace_certificate"
 		case strings.HasPrefix(o.Code, "trust."):
 			advice = "advice.provide_chain"
@@ -315,6 +333,9 @@ func Build(language, version, commit string, now time.Time, specs []model.InputS
 	d := Document{SchemaVersion: 1, Tool: Tool{"tlscheck", Safe(version), Safe(commit)}, GeneratedAt: now.UTC().Format(time.RFC3339Nano), Language: language, Inputs: []Input{}, Remote: []Remote{}, Local: Local{Certificates: []Certificate{}, Keys: []Key{}, Pairs: []Pair{}, Checks: []Check{}, Issues: []Issue{}}}
 	for _, spec := range specs {
 		v := Input{Index: spec.Index, Kind: string(spec.Kind)}
+		if spec.ListSource != nil {
+			v.ListSource = &ListSource{Path: Safe(spec.ListSource.Path), Line: spec.ListSource.Line}
+		}
 		for _, r := range inputs {
 			if r.InputIndex != spec.Index {
 				continue
@@ -349,6 +370,9 @@ func Build(language, version, commit string, now time.Time, specs []model.InputS
 		b.add(&item.Checks, "validity", c.Validity)
 		b.add(&item.Checks, "ca_constraints", c.CAConstraints)
 		b.add(&item.Checks, "linkage", c.Linkage)
+		if c.ExpiryPolicy != nil {
+			item.Checks = append(item.Checks, b.expiryPolicy(*c.ExpiryPolicy))
+		}
 		for _, link := range c.Links {
 			item.Links = append(item.Links, Link{Safe(link.IssuerFingerprint), link.SignatureValid})
 		}
@@ -396,6 +420,16 @@ func Build(language, version, commit string, now time.Time, specs []model.InputS
 	}
 	for _, r := range remotes {
 		item := Remote{InputIndex: r.Target.InputIndex, Target: Safe(r.Target.String()), Stage: Safe(r.Stage), HandshakeComplete: r.HandshakeComplete, Certificates: []PublicCertificate{}, Checks: []Check{}, Trust: b.trust(r.Trust), Limitations: []Message{}, Issues: []Issue{}}
+		if r.Comparison != nil {
+			item.Comparison = b.comparison(r.Comparison)
+		}
+		if r.ConnectionInfo != nil {
+			info := r.ConnectionInfo
+			item.Connection = &Connection{RequestedIP: Safe(info.RequestedIP.String()), Connected: info.Connected}
+			if info.Connected && info.PeerAddress.IsValid() {
+				item.Connection.PeerAddress = optional(info.PeerAddress.String())
+			}
+		}
 		if r.HandshakeComplete {
 			item.TLS = &TLS{Safe(r.TLSVersionName), r.TLSVersion, Safe(r.CipherSuiteName), r.CipherSuite}
 		}
@@ -410,6 +444,9 @@ func Build(language, version, commit string, now time.Time, specs []model.InputS
 		b.add(&item.Checks, "handshake", r.Handshake)
 		b.add(&item.Checks, "revocation", r.Revocation)
 		b.add(&item.Checks, "aia", r.AIARetrieval)
+		for _, policy := range r.ExpiryPolicies {
+			item.Checks = append(item.Checks, b.expiryPolicy(policy))
+		}
 		if r.PlatformPolicy != "" {
 			item.Limitations = append(item.Limitations, Message{Safe(r.PlatformPolicy), b.t.Text(r.PlatformPolicy, nil)})
 		}

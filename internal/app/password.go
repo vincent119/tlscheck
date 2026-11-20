@@ -22,6 +22,10 @@ func (a App) parsePasswordInputs(ctx context.Context, o RunOptions, diagnostics 
 	}
 	used := map[int]bool{}
 	protected := input.NewParser().LocalPaths(ctx, o.Inputs)
+	protected = append(protected, o.TargetFiles...)
+	for _, path := range o.CompareCertPaths {
+		protected = append(protected, path)
+	}
 	configPath, pathErr := config.Path()
 	if pathErr == nil {
 		protected = append(protected, configPath)

@@ -88,6 +88,9 @@ func present(d Document) Presentation {
 		}
 	}
 	for _, r := range d.Remote {
+		if r.Comparison != nil {
+			add(r.InputIndex, r.Comparison.Result)
+		}
 		checks(r.InputIndex, r.Checks)
 		checks(r.InputIndex, r.Trust.Checks)
 		for _, issue := range r.Issues {

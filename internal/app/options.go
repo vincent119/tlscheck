@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"io"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,14 @@ type RunOptions struct {
 	Timeout                            time.Duration
 	ExpiryWarningDays                  int
 	Overwrite, Help, Version, Settings bool
+	FailOnExpiryWarning                bool
+	TargetFiles                        []string
+	Concurrency                        int
+	BatchMode                          bool
+	CompareCertBindings                []string
+	CompareCertPaths                   map[int]string
+	ConnectIPBindings                  []string
+	ConnectIPs                         map[int]netip.Addr
 }
 
 var errArguments = errors.New("cli.invalid_arguments")
@@ -47,6 +56,10 @@ func rootCommand(o *RunOptions) *cobra.Command {
 	f := c.Flags()
 	f.StringArrayP("remote", "r", nil, "遠端 TLS 目標")
 	f.StringArrayP("local", "l", nil, "本機憑證或私鑰檔案")
+	f.StringArrayVar(&o.TargetFiles, "targets-file", nil, "遠端目標清單（可重複）")
+	f.StringArrayVar(&o.CompareCertBindings, "compare-cert", nil, "逐目標候選憑證 INDEX=PATH（可重複）")
+	f.StringArrayVar(&o.ConnectIPBindings, "connect-ip", nil, "逐目標連線IP INDEX=IP（可重複）")
+	f.IntVar(&o.Concurrency, "concurrency", 1, "遠端並行數（1–32，預設1）")
 	f.StringArrayVar(&o.PasswordFiles, "password-file", nil, "密碼檔 INDEX=PATH（可重複）")
 	f.StringArrayVar(&o.AskPasswords, "ask-password", nil, "隱藏輸入密碼 INDEX（可重複）")
 	f.StringVarP(&o.Language, "language", "L", "", "en | zh-TW | zh-CN")
@@ -55,6 +68,7 @@ func rootCommand(o *RunOptions) *cobra.Command {
 	f.StringVarP(&o.Output, "output", "o", "-", "報告目的地（- 為 stdout）")
 	f.DurationVarP(&o.Timeout, "timeout", "t", 10*time.Second, "每個遠端目標總逾時（1ms–5m）")
 	f.IntVar(&o.ExpiryWarningDays, "expiry-warning-days", 30, "到期提醒天數（0–36500）")
+	f.BoolVar(&o.FailOnExpiryWarning, "fail-on-expiry-warning", false, "到期提醒視為驗證失敗")
 	f.BoolVar(&o.Overwrite, "overwrite", false, "允許覆寫既有報告")
 	f.BoolVarP(&o.Settings, "settings", "s", false, "互動語系與 theme 設定")
 	f.BoolVarP(&o.Help, "help", "h", false, "顯示說明")
@@ -74,6 +88,10 @@ func parseOptions(args []string) (RunOptions, error) {
 		return o, errArguments
 	}
 	f := c.Flags()
+	o.BatchMode = f.Changed("targets-file") || f.Changed("concurrency")
+	if o.Concurrency < 1 || o.Concurrency > 32 {
+		return o, errArguments
+	}
 	if f.Changed("language") && o.Language != "en" && o.Language != "zh-TW" && o.Language != "zh-CN" {
 		return o, errArguments
 	}
@@ -121,7 +139,7 @@ func parseOptions(args []string) (RunOptions, error) {
 				}
 				value = args[i]
 			}
-			if (name == "remote" || name == "local") && value == "" {
+			if (name == "remote" || name == "local" || name == "targets-file") && value == "" {
 				return o, errArguments
 			}
 			if name == "remote" {
@@ -129,6 +147,12 @@ func parseOptions(args []string) (RunOptions, error) {
 			}
 			if name == "local" {
 				add(model.LocalInput, value)
+			}
+			if name == "targets-file" {
+				if value == "-" {
+					return o, errArguments
+				}
+				add(model.TargetListInput, value)
 			}
 			continue
 		}
@@ -165,15 +189,17 @@ func parseOptions(args []string) (RunOptions, error) {
 			break
 		}
 	}
-	if err := bindPasswords(&o); err != nil {
-		return o, err
+	if len(o.TargetFiles) == 0 {
+		if err := bindPasswords(&o); err != nil {
+			return o, err
+		}
 	}
 	query := o.Help || o.Version || o.Settings
 	if query {
 		if len(o.Inputs) > 0 {
 			return o, errArguments
 		}
-		for _, name := range []string{"remote", "local", "format", "detail", "password-file", "ask-password", "output", "overwrite", "timeout", "expiry-warning-days"} {
+		for _, name := range []string{"remote", "local", "targets-file", "concurrency", "connect-ip", "compare-cert", "format", "detail", "password-file", "ask-password", "output", "overwrite", "timeout", "expiry-warning-days", "fail-on-expiry-warning"} {
 			if f.Changed(name) {
 				return o, errArguments
 			}
@@ -265,7 +291,7 @@ type passwordBinding struct {
 }
 
 func repeatableFlag(name string) bool {
-	return name == "remote" || name == "local" || name == "password-file" || name == "ask-password"
+	return name == "remote" || name == "local" || name == "targets-file" || name == "connect-ip" || name == "compare-cert" || name == "password-file" || name == "ask-password"
 }
 func bindPasswords(o *RunOptions) error {
 	o.Passwords = map[int]passwordBinding{}
