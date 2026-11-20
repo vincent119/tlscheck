@@ -1,219 +1,257 @@
 # tlscheck
 
+tlscheck checks remote TLS certificates, local certificate chains, and certificate/private-key pairs. Use it to investigate a TLS failure, check expiry before a deployment, or confirm that a server is presenting the certificate you expected.
+
+[![CI](https://img.shields.io/github/actions/workflow/status/vincent119/tlscheck/ci.yml?branch=main&label=CI&logo=githubactions)](https://github.com/vincent119/tlscheck/actions/workflows/ci.yml)
+[![Go vulnerability scan](https://img.shields.io/github/actions/workflow/status/vincent119/tlscheck/go-vulnerability.yml?branch=main&label=Go%20vulnerability%20scan&logo=githubactions)](https://github.com/vincent119/tlscheck/actions/workflows/go-vulnerability.yml)
+[![Go](https://img.shields.io/badge/Go-1.27.0%2B-00ADD8?logo=go&logoColor=white)](go.mod)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-vincent119%2Ftlscheck-181717?logo=github)](https://github.com/vincent119/tlscheck)
+[![Stars](https://img.shields.io/github/stars/vincent119/tlscheck?style=flat&logo=github)](https://github.com/vincent119/tlscheck/stargazers)
+
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-tlscheck is a Go CLI for diagnosing remote TLS certificates and checking local certificates and private-key pairs. It reports handshake facts separately from system trust and keeps local keys out of remote connections.
+The default report is a table. JSON, offline HTML, and Markdown are also available, with messages in English, Traditional Chinese, or Simplified Chinese. Remote checks keep handshake facts separate from trust verification and never use local private keys for client authentication.
 
-## Build and start
+## Installation
 
-Requires Go 1.27.0 or newer. CI has validated Go 1.27.4 on macOS arm64/amd64 and Windows amd64. Run these commands from the repository root; GNU Make is optional.
+The package commands below are the intended installation interface. **Homebrew/Scoop packages are not published or verified yet. Use these commands after the packages are published.** Download macOS/Windows binaries and `checksums.txt` from [GitHub Releases](https://github.com/vincent119/tlscheck/releases). For now, [build from source](#build-from-source). Archive checks and release preparation are in the [release guide](docs/releasing.md).
 
-macOS:
-
-```sh
-go build -o bin/tlscheck ./cmd/tlscheck
-./bin/tlscheck
-./bin/tlscheck --version
-```
-
-Windows, using PowerShell:
+### Windows (Scoop)
 
 ```powershell
-go build -o bin/tlscheck.exe ./cmd/tlscheck
-.\bin\tlscheck.exe
-.\bin\tlscheck.exe --version
+scoop bucket add tlscheck 'https://github.com/vincent119/scoop-bucket'
+scoop install tlscheck/tlscheck
+tlscheck --version
 ```
 
-No arguments prints help and exits with 0. An unmodified development build reports version `development` and source commit `unknown`. Use `--help`/`-h` for help and `--version`/`-V` for version information; either can accompany `--language`/`-L`, but cannot mix with check targets or execution flags. Unknown flags and invalid combinations return 2. Prefix local filenames beginning with `-` with `./` or `.\`, or place them after `--`.
-
-Source builds are available. The 2026-11-18 [cross-platform CI run](https://github.com/vincent119/tlscheck/actions/runs/44285001106) (source `a1cff07`) passed four-target snapshot packaging and checksums, plus native tests, isolated archive installation/same-version reinstallation, and configuration-preservation checks on macOS arm64/amd64 and Windows amd64. Windows arm64 is cross-build only. Published releases, Homebrew/Scoop installation and upgrades, signing, and notarization remain unverified; real Console operation and full interactive shell completion still need acceptance testing. See [installation and release maintenance](docs/releasing.md) for evidence and limits.
-
-## Check targets and files
-
-Examples below require your own local files or access to the indicated service. Public-network examples are illustrative, not installation or connectivity evidence.
-
-macOS:
+### macOS (Homebrew)
 
 ```sh
-./bin/tlscheck example.com 'https://example.com:8443/'
-./bin/tlscheck 192.0.2.10 '[2001:db8::1]:443' '例子.測試'
-./bin/tlscheck ./local/site.pem ./local/intermediate.pem ./local/site.key
-./bin/tlscheck ./local/root.cer
-./bin/tlscheck ./local/site.pem example.com ./local/site.key
-./bin/tlscheck ./local/missing.pem
-printf '%s\n' "$?"
+brew tap vincent119/tap
+brew install vincent119/tap/tlscheck
+tlscheck --version
 ```
 
-Windows PowerShell:
+### Linux
 
-```powershell
-.\bin\tlscheck.exe example.com 'https://example.com:8443/'
-.\bin\tlscheck.exe 192.0.2.10 '[2001:db8::1]:443' '例子.測試'
-.\bin\tlscheck.exe .\local\site.pem .\local\intermediate.pem .\local\site.key
-.\bin\tlscheck.exe .\local\root.cer
-.\bin\tlscheck.exe .\local\site.pem example.com .\local\site.key
-.\bin\tlscheck.exe .\local\missing.pem
-$LASTEXITCODE
+No Linux package or release archive is configured yet. The current Homebrew Formula is macOS-only, so it cannot be used as a Linuxbrew install. See [source builds](#build-from-source) for the available build instructions.
+
+## Everyday checks
+
+The examples use the installed `tlscheck` command. For a source build, substitute `./bin/tlscheck` on macOS/Linux or `.\bin\tlscheck.exe` on Windows. Remote targets need network access, and local paths must refer to your own files.
+
+```sh
+tlscheck example.com 'https://example.com:8443/'
+tlscheck --local ./local/site.pem --local ./local/chain.pem --local ./local/site.key
+tlscheck --local ./local/site.pem --detail full -L zh-TW
+tlscheck --remote example.com --expiry-warning-days 14 --fail-on-expiry-warning
 ```
 
-The IP examples use documentation addresses and need replacement with reachable targets. The missing-file example returns 2. A site certificate and key can match while trust verification still fails.
+`summary` is the default table detail. It keeps failures, warnings, and verification limits visible while reducing repeated successful checks. Use `--detail full` for every detail and diagnostic code. Detail selection affects only table output.
 
-An existing file takes precedence over network interpretation. Missing explicit paths and missing `.pem`, `.cer`, `.crt`, or `.key` filenames are file errors, not network targets. Only regular files are accepted. Other inputs are interpreted as DNS names, Unicode IDN names normalized through IDNA, IPv4, IPv6, `localhost`, or single-label hostnames. IPv6 zone identifiers are unsupported.
+Expiry warnings start at 30 days. A warning alone leaves the exit code unchanged. Add `--fail-on-expiry-warning` to make a warning fail the check with exit code 1, including warnings on parsed CA and intermediate certificates. Setting `--expiry-warning-days 0` disables this policy and expiry warnings. Expired-certificate checks still run.
 
-HTTPS URLs must use standard `https://`; the default port is 443 and explicit ports must be integers from 1 to 65535. A trailing slash is accepted. URL user information, path, query and fragment are automatically discarded before connection and reporting. Other URL schemes are unsupported. Avoid putting credentials in commands: your shell history can retain the original input even when the report removes it.
+Existing files take precedence during automatic input detection. Use `--remote` to force a network target or `--local` to force a file. For a filename beginning with `-`, prefix it with `./` or `.\`, or put it after `--`.
 
-| Local object | Supported formats | Encodings |
+Targets accept DNS names, Unicode domains through IDNA, IPv4, IPv6, `localhost`, and single-label hostnames. IPv6 with a port uses brackets, such as `[2001:db8::1]:8443`. Zone identifiers are rejected. These IP examples are documentation addresses and must be replaced with reachable targets.
+
+URLs require standard `https://`. The default port is 443, and an explicit port must be in 1–65535. User information, paths, queries, and fragments are removed before connecting and reporting. Shell history can still retain the original command, so keep credentials out of target URLs.
+
+## Batch targets and deployment checks
+
+A targets file is UTF-8, with one remote target per line. Blank lines and whole-line `#` comments are ignored. Entries are target values, not shell commands or CLI flags.
+
+```text
+# targets.txt
+example.com
+https://example.org:8443/
+```
+
+```sh
+tlscheck --targets-file ./targets.txt
+tlscheck --targets-file ./targets.txt --concurrency 4 -f json
+tlscheck --targets-file ./targets.txt --connect-ip 0=192.0.2.10 --compare-cert 0=./local/expected.pem
+tlscheck --remote example.com --compare-cert 0=./local/expected.pem
+```
+
+Remote checks run sequentially by default. With `--concurrency` set to 1–32, reports retain input order even when checks finish in a different order, including runs that mix repeated `--targets-file` lists with direct remote or local inputs.
+
+Mappings use `INDEX=VALUE`. Indices start at 0 after every list has been expanded, and local inputs and invalid nonempty target lines also occupy an index. Repeated hostnames remain separate occurrences. Split a mapping at its first `=`, so candidate paths can contain spaces, further equals signs, or Windows drive letters.
+
+`--connect-ip INDEX=IP` changes the connection address for that target while retaining the original port and using the original hostname for both SNI and name verification. It skips DNS and does not fall back to another address. The value must be a plain IPv4 or IPv6 literal, without brackets, a zone, or a port. Reports distinguish the requested IP from the observed peer address.
+
+`--compare-cert INDEX=PATH` compares the candidate with the leaf certificate from the same TLS handshake. It compares complete certificate DER. Renewed certificates differ even with the same public key. A candidate can be a PEM/DER certificate or a PEM chain with exactly one distinct non-CA certificate after DER deduplication, and it must contain no private keys, damaged blocks, other containers, or additional leaves. Candidate certificates do not enter the local pairing collection or the trust store.
+
+A match can coexist with a trust failure. Different certificates return 1, while a connection failure returns 2 and leaves the comparison unperformed if no leaf was observed. Duplicate mappings, local or invalid target indices, and out-of-range indices are rejected before network checks.
+
+## Local files and PFX passwords
+
+| Object | Formats | Encoding |
 |---|---|---|
-| X.509 certificate, including CA | Certificate | PEM, DER |
+| X.509 certificate, including CA | Certificate or PEM chain | PEM, DER |
 | RSA private key | PKCS#1, PKCS#8 | PEM, DER |
-| ECDSA private key | SEC1, PKCS#8; NIST P-224/P-256/P-384/P-521 | PEM, DER |
+| ECDSA private key | SEC1, PKCS#8, with NIST P-224/P-256/P-384/P-521 | PEM, DER |
 | Ed25519 private key | PKCS#8 | PEM, DER |
+| PKCS#7 / P7B | Certificate-only SignedData | PEM, DER |
+| PKCS#12 / PFX | One private key with certificates, or certificates only | DER |
 
-Multiple PEM blocks are accepted. Valid objects are retained when another block is damaged or unsupported; the final exit code is 2. Encrypted private keys are unsupported, are not decrypted, and do not trigger a password prompt. PKCS#12/PFX and other key algorithms are not supported.
+Ordinary PEM parsing retains valid objects when another block is damaged or unsupported, and returns 2. PFX decoding is atomic, so a failed container does not contribute partial keys or certificates. Standalone encrypted private-key files are unsupported. PFX decryption is limited to the supported container format.
 
-## Complete options and output
+```sh
+tlscheck --local ./local/chain.p7b
+tlscheck --local ./local/identity.pfx --ask-password 0
+tlscheck --local ./local/identity.pfx --password-file '0=./local/pfx-password.txt'
+```
 
-| Option | Short | Default / purpose |
+A PFX with no password binding is tried with an empty password. `--ask-password INDEX` reads without echo and requires a terminal. There is no plaintext password flag or password environment variable. Password files must be regular files with restricted permissions, and cannot alias inputs, candidate files, target lists, or configuration. On Unix, the current user must own the file with owner-only permissions such as `0600`. Windows accepts owners and allowed ACL entries only for the current user, SYSTEM, or Administrators.
+
+Password files contain UTF-8 without BOM. One final LF or CRLF is removed, while other whitespace is preserved. Passwords are limited to 4 KiB and BMP characters, excluding NUL, and non-BMP characters such as emoji are rejected. PFX supports PBES2 with PBKDF2-HMAC-SHA-256 and AES-256-CBC, plus SHA-256 MAC. Legacy RC2/3DES and SHA-1 profiles are unsupported. Use a modern PFX export if an older container is rejected.
+
+## Options
+
+| Option | Short | Default or purpose |
 |---|---|---|
-| `[target-or-file]...` | | Auto-detect; existing files take precedence |
-| `--remote TARGET` | `-r` | Force remote; repeatable; never reads a same-named local file |
-| `--local PATH` | `-l` | Force local; repeatable; missing files never become remote targets |
-| `--language CODE` | `-L` | One-run en / zh-TW / zh-CN override |
-| `--format FORMAT` | `-f` | table (default) / json / html / markdown |
-| `--output PATH` | `-o` | `-` (stdout) |
-| `--overwrite` | | Off; requires output other than `-` |
-| `--timeout DURATION` | `-t` | 10s; 1ms–5m |
-| `--expiry-warning-days DAYS` | | 30; 0–36500; 0 disables warnings |
-| `--settings` | `-s` | Independent interactive language/theme settings |
-| `--help` | `-h` | Help, exit 0 |
-| `--version` | `-V` | Version, exit 0 |
-| `--` | | All following tokens are positional inputs |
+| `[target-or-file]...` | | Automatic detection, existing files first |
+| `--remote TARGET` | `-r` | Remote input, repeatable |
+| `--local PATH` | `-l` | Local file, repeatable |
+| `--targets-file PATH` | | Target list, repeatable |
+| `--concurrency N` | | 1, range 1–32 |
+| `--connect-ip INDEX=IP` | | Per-target connection address, repeatable |
+| `--compare-cert INDEX=PATH` | | Per-target expected certificate, repeatable |
+| `--password-file INDEX=PATH` | | Protected PFX password file, repeatable |
+| `--ask-password INDEX` | | Hidden PFX password prompt, repeatable |
+| `--language CODE` | `-L` | One-run `en`, `zh-TW`, or `zh-CN` override |
+| `--format FORMAT` | `-f` | `table`, `json`, `html`, or `markdown`, default `table` |
+| `--detail LEVEL` | | `summary` or `full`, default `summary`, table only |
+| `--output PATH` | `-o` | `-` for stdout |
+| `--overwrite` | | Allow replacing an existing report |
+| `--timeout DURATION` | `-t` | 10s per target, range 1ms–5m |
+| `--expiry-warning-days N` | | 30, range 0–36500, 0 disables warnings |
+| `--fail-on-expiry-warning` | | Expiry warnings become failures |
+| `--settings` | `-s` | Interactive language and menu theme settings |
+| `--help` | `-h` | Show help |
+| `--version` | `-V` | Show version |
+| `--` | | Treat remaining tokens as positional inputs |
 
-Positional, remote and local inputs retain command-line occurrence order and duplicates. Each remote/local flag takes one value without splitting commas. Other flags cannot repeat; valueless boolean flags cannot use forms such as `--overwrite=true`. Required values cannot be omitted or empty, including `--remote=`/`--local=`; these errors never create a report. Settings cannot mix with check or language flags; `--settings --help` works without opening the menu. A language override alone shows help; execution flags without a target return 2.
+Each repeatable flag takes one value per occurrence. Other flags cannot repeat. Boolean flags take no value, so forms such as `--overwrite=true` are rejected. Help and version can accompany a language override, but cannot mix with execution flags or check targets. `--settings` is a separate action, and `--settings --help` shows its help without opening the menu. No arguments prints help and returns 0.
 
-```sh
-./bin/tlscheck -r example.com --local ./local/site.pem -L zh-TW
-./bin/tlscheck 'https://example.com:8443/' -t 5s --expiry-warning-days 14
-./bin/tlscheck -l ./local/site.pem -f json -o ./report.json
-./bin/tlscheck -l ./local/site.pem -f html -o ./report.html --overwrite
-./bin/tlscheck -l ./local/site.pem -f markdown
-./bin/tlscheck --settings
-```
-
-Format is never inferred from the extension. The output parent must already exist; `~` is not expanded. Existing destinations require `--overwrite`. Directories, special files, symlinks, and destinations aliasing inputs/configuration through identity or hardlinks are rejected. Reports serialize completely before temporary-file writing, syncing, closing and committing. Output errors return 2. JSON `summary.check_exit_code` describes checks only; the process may additionally return 2 for I/O failures. New macOS reports use 0600 without inherited ACLs; overwrites preserve native ACLs, owner and group. Writes fail safely if security attributes cannot be preserved or ACL restrictions would prevent commit/failure cleanup. Windows uses protected DACLs and checks existing security attributes. Read-only destinations are replaced atomically relative to the retained directory handle, preserving read-only attributes and DACLs without first deleting the original or clearing its read-only attribute. Unsupported Windows/filesystem combinations fail safely; read-only replacement, DACL preservation, and failure cleanup passed Windows amd64 CI regressions. Detected destination snapshot changes stop the write; the final snapshot check and rename are not a compare-and-swap guarantee against arbitrary external processes.
-
-JSON is one UTF-8 object with two-space indentation and a final newline, using integer `schema_version: 1`. Root fields are `tool`, `generated_at` (UTC), `language`, ordered `inputs`, `local`, `remote`, and `summary`. Status values remain `passed`/`failed`/`not_performed`, and severities `none`/`verification`/`execution`. Codes are stable and messages localized; empty collections are `[]`, unobserved TLS is `null`. `advice` is `null` or `{ "code": "advice.…", "message": "…" }`, with language-independent codes. Table/HTML/Markdown include per-input results and highest severity, plus a key-ID/certificate-ID pair table; derived views do not increment global counts. Table displays backslashes as `\\` and pipes as `\u007c`; other formats keep their own safe representation. Certificates use full SHA-256 IDs; private keys expose only per-source IDs and public metadata. Private-key material and original full URLs never enter the report. HTML is standalone, loads no external resources, executes no JavaScript, and never opens a browser automatically.
-
-## Shell completion
-
-`completion` is a reserved helper command. Use `-r completion` or `-- completion` for that hostname, or `-l completion` for that filename. `completion SHELL --help`/`-h` shows shell-level help. Hidden completion never echoes raw errors; generated debug functions do not write files, and `BASH_COMP_DEBUG_FILE` does not enable writing. Completion never connects or reads configuration/certificate contents; filename completion may enumerate directories. Bash requires a compatible bash-completion package to be loaded, providing `_get_comp_words_by_ref`/`_init_completion`; sourcing the generated script alone does not supply this shell dependency. This machine lacks that package, so Bash evidence covers syntax and protocol only.
-
-Local acceptance on 2026-11-19: macOS Zsh 5.9 passed 10 actual Tab cases, including equals syntax, short flags, and filenames with spaces/Unicode. macOS PowerShell 7.5.2 passed 30 native completion-engine checks across scripts with and without descriptions. When no candidates are available and file fallback is forbidden, a placeholder preserves the existing word; an empty cursor position may gain one space, without adding arguments or falling back to filenames. Normal `--local`/`--output` filename completion is retained. The Windows PowerShell engine and real Console interaction remain unverified.
-
-All four shells accept `--no-descriptions` and `-L`/`--language`, but no execution flags.
+## Save a report
 
 ```sh
-# Bash
-source <(./bin/tlscheck completion bash)
-# Zsh
-source <(./bin/tlscheck completion zsh)
-# Fish
-./bin/tlscheck completion fish | source
-# Generate without descriptions
-./bin/tlscheck completion zsh --no-descriptions
+tlscheck --local ./local/site.pem -f json -o ./report.json
+tlscheck --local ./local/site.pem -f html -o ./report.html --overwrite
+tlscheck --local ./local/site.pem -f markdown
 ```
 
-PowerShell:
+Select the format with `--format` rather than the filename extension, then use `--output` to write the report to a file and leave stdout empty. The parent directory must exist. Existing files require `--overwrite`, and `~` is not expanded.
 
-```powershell
-.\bin\tlscheck.exe completion powershell | Out-String | Invoke-Expression
-```
+Output rejects symlinks, special files, and aliases of protected input, candidate, list, password, or configuration files. Reports are serialized before a temporary-file write and commit. Replacement preserves the required native security attributes or fails safely. Detected destination changes stop the write. The final snapshot check and rename do not provide compare-and-swap protection against arbitrary external writers.
 
-These activate completion in the current shell; add the applicable command to your own startup file for persistence. Script generation and available local-shell syntax validation do not establish native Windows/Fish interactive success.
+JSON uses `schema_version: 1`, stable codes and identifiers, UTC timestamps, `[]` for empty collections, and `null` for unobserved facts. Messages follow the selected language. New modes add optional `inputs[].list_source`, `remote[].connection`, and `remote[].comparison` fields. They are omitted when unused. Consumers that reject unknown fields must account for these additions. `summary.check_exit_code` covers checks, and a later output failure can still make the process return 2.
 
-## Language configuration
+HTML is a standalone offline document with no JavaScript or external resources. It does not open a browser. All formats exclude private-key material, and target URL credentials and queries are removed. Per-input counts can overlap because local inputs share checks, so use the global summary for totals.
 
-Use `--language en|zh-TW|zh-CN`/`-L` for a one-run override, ahead of JSON and default English. A valid CLI language bypasses configuration reads and is never saved. There are no language environment-variable or configuration-path overrides. The platform directory is resolved by `os.UserConfigDir()`.
+## Language and completion
+
+Use `-L zh-TW`, `-L zh-CN`, or `-L en` for a one-run override that bypasses configuration reads and leaves the saved language unchanged. Otherwise, the JSON language setting takes precedence over default English. There is no configuration-path or language environment override.
 
 | Platform | Configuration file |
 |---|---|
 | macOS | `~/Library/Application Support/tlscheck/config.json` |
 | Windows | `%AppData%\tlscheck\config.json` |
 
-Run `tlscheck --settings`/`-s` for interactive language and theme settings. Both stdin and stderr must be terminals; the menu uses stderr and leaves stdout empty. Use arrows, Enter, Esc (back/cancel), Ctrl+C (cancel), or `t` (theme). A macOS terminal disconnect exits without saving. Only **Save and exit** writes configuration; cancel leaves it unchanged. Repair malformed or unknown-field configurations manually before saving. Themes `normal`, `dark`, and `light` affect only the menu. Alternatively create UTF-8 JSON without BOM:
-
-```json
-{"language":"en"}
-```
-
 ```json
 {"language":"zh-TW","theme":"normal"}
 ```
 
-```json
-{"language":"zh-CN"}
+`--settings` needs terminal stdin and stderr. Use arrows, Enter, Esc, Ctrl+C, or `t` for theme selection. Only **Save and exit** writes `config.json`. Cancel leaves it unchanged. Themes `normal`, `dark`, and `light` affect the menu only. Repair malformed configurations before saving. Missing settings use English and the normal theme. Invalid or unreadable settings produce a warning on stderr, with safe defaults, and do not alone change the exit code. The configuration limit is 64 KiB.
+
+Load completion in the current shell:
+
+```sh
+# Bash, after loading a compatible bash-completion package
+source <(tlscheck completion bash)
+# Zsh, after compinit
+source <(tlscheck completion zsh)
+# Fish
+tlscheck completion fish | source
 ```
 
-| Condition | Behavior |
-|---|---|
-| File absent, `language` absent, or empty string | English, without a warning |
-| Directory resolution/read/stat/close error or nonregular file | English warning and fallback |
-| More than 64 KiB of actual data | English warning and fallback |
-| Invalid JSON/UTF-8, nonobject root, trailing data | English warning and fallback |
-| Nonstring value, including `null`, unknown/duplicate key | English warning and fallback |
-| Any value other than exact `en`, `zh-TW`, `zh-CN` or empty string | English warning and fallback |
+```powershell
+tlscheck completion powershell | Out-String | Invoke-Expression
+```
 
-Missing or empty theme uses normal; an unsupported theme warns and falls back to normal. Ordinary checks, queries and completion never write configuration.
+All four shells accept `--no-descriptions` and a language override when generating scripts. Completion performs no certificate checks and reads no configuration or certificate contents. Filename completion may list directories. A PowerShell no-candidate placeholder preserves the word and suppresses filename fallback, with a possible extra space at an empty cursor. Real Windows keyboard Tab, menu saving, and Console restoration still need manual acceptance. Bash/Fish interactive coverage also remains incomplete.
 
-Table/HTML/Markdown localize input modes, severities, check names, stages, and URI redaction reasons. JSON identifiers, stored settings, certificate values, and paths remain unchanged. Language options retain their native names; theme options use localized labels. If both local and English templates fail, the final safe message follows the effective language; unsupported languages use English and internal message IDs are never echoed.
+## Trust, results, and limits
 
-Configuration warnings go to stderr and do not alone change the exit code. Missing translations fall back to English. Hostnames, paths, algorithms and public certificate values retain their original text; unsafe terminal controls and URL additions are removed for display.
+Local files share a certificate/key collection. Pairing compares standardized public-key DER and lists all matches. A standalone key or certificate does not require a pair, and remote certificates are never paired with local keys. With keys and site certificates together, every key and site certificate must have a match. CA certificates can match keys but do not require one.
 
-## Trust and key pairing
-
-All local files contribute to a common certificate/key collection. Remote targets are checked independently and sequentially. Local keys are not sent for client authentication and are never paired with remote certificates.
-
-Trust uses the operating system trust store. A root supplied as input is only a candidate issuer; it does not become trusted automatically. The peer-presented chain describes what the server sent, while a verified chain exists only after successful trust verification. A completed handshake or a valid issuer signature alone does not establish trust. Local certificate checks have no hostname input, so name validation is reported as not performed.
-
-A standalone CA must pass its applicable validity/CA constraints and establish a trusted system path. No trusted path is a check failure (1); inability to access or execute the trust machinery is an execution error (2). On macOS, standalone CA verification uses the built-in `/usr/bin/security` with CA/basic X.509 policy and network issuer fetching disabled, followed by Go chain checks. Only certificates enter protected temporary files; private keys do not. Platform policies may add checks; tlscheck does not actively fetch AIA issuers or perform CRL/OCSP checks itself.
-
-Pairing compares complete standardized public-key DER, not algorithm names or key sizes. All matching relationships are listed. Duplicate certificate sources are preserved; keys remain separate by source. A key alone or certificates alone do not require pairing. When keys and site certificates coexist, every key and site certificate must have a match. CA certificates may match a key but do not require one; CA-plus-key without a site does not require full coverage. Invalid keys cannot produce successful matches.
-
-RSA uses standard validity checks. ECDSA checks scalar range, curve membership and consistency between scalar and public point. Ed25519 checks length and seed-derived consistency. Checks cover the parsed representation, not source fields discarded or normalized by the parser. They do not establish randomness quality, secrecy, cryptographic strength or every security property. Reports expose public metadata, not private-key bytes.
-
-## Results and limits
+Trust comes from the operating system store. Supplying a root file does not install or trust it. Local certificate checks have no hostname input. Remote checks verify the original target identity, and a completed handshake alone does not establish trust. On macOS, standalone CA verification uses `/usr/bin/security` with network issuer fetching disabled, followed by Go chain checks. tlscheck does not actively fetch AIA issuers or perform CRL/OCSP revocation checks.
 
 | Exit code | Meaning |
 |---|---|
-| 0 | Applicable checks passed, help/version/completion succeeded, settings saved/cancelled, or only expiry/configuration warnings |
-| 1 | Certificate/key/trust/pairing check failure |
-| 2 | Input, parsing, unsupported format, connection, timeout, cancellation or output error |
+| 0 | Applicable checks passed, or help, completion, or settings completed |
+| 1 | Certificate, key, trust, pairing, comparison, or enabled expiry-policy failure |
+| 2 | Input, parsing, unsupported format, network, timeout, cancellation, or output error |
 
-The highest severity wins: 2 > 1 > 0. Individual input failures do not stop remaining inputs; invalid CLI flag combinations are rejected before checking. States are passed, failed and not performed. Not performed is neither a pass nor an independent failure. Summary counts describe the displayed checks, not the number of input files.
+The highest code wins: 2 > 1 > 0. Warnings alone return 0 unless the expiry failure policy is enabled. Unperformed checks are shown as such. Input errors can leave other valid inputs available, while invalid flags, mappings, and global resource limits stop execution before network checks. Configuration warnings and execution diagnostics use stderr. Reports use stdout unless `--output` selects a file.
 
-Table reports and verification failures go to stdout by default. With `--output PATH`, the full report goes only to that file, with no saved banner on stdout. Configuration warnings and execution diagnostics go to stderr; an execution error can appear in both the report and the diagnostic stream.
+| Resource | Limit |
+|---|---|
+| Local file or comparison candidate | 10 MiB of actual reads per file |
+| Target lists | 1 MiB per file, 8 KiB per line, up to 200 files and 8 MiB total |
+| Expanded inputs in batch mode | 1,000, including local inputs and invalid target entries |
+| Remote target | Shared DNS/TCP/TLS deadline, default 10s |
 
-Each local certificate/key file is limited to 10 MiB of actual reads. Each remote target has a shared DNS/TCP/TLS handshake deadline, default 10 seconds and configurable with `--timeout`/`-t` from 1ms to 5m, not a separate 10 seconds per stage. Platform trust operations can have platform-specific cancellation limits. Dates use UTC; remaining days are floored, so a recently expired certificate can show -1 day. A nonexpired certificate expiring within 30 × 24 hours produces a warning by default; `--expiry-warning-days` accepts 0–36500, where 0 disables warnings but preserves expiry validation; that warning alone does not change the exit code.
+PFX decoding also bounds ASN.1 depth, bag/certificate counts, decrypted bytes, and derivation work. Dates are UTC, and remaining days are floored. Platform trust APIs have platform-specific cancellation limits.
 
-Reports support table, JSON, standalone offline HTML, and GFM Markdown without terminal color or animation. tlscheck does not request, renew or deploy certificates, inspect web content, scan cipher suites, decrypt keys, or manage system trust. Planned initial release artifacts are unsigned and unnotarized; no signed/notarized distribution is currently verified.
+tlscheck does not generate CSRs, keys, or certificates, renew deployments, scan website content or cipher suites, or manage system trust. Cryptographic checks concern parsed objects and public-key consistency. They do not establish key secrecy or randomness quality.
 
-## Development and maintenance
+## Build from source
 
-From the repository root, on either platform with Go installed:
+Go 1.27.0 or newer is required, and CI uses Go 1.27.4. Clone the repository and work from its root:
 
-```text
+```sh
+git clone https://github.com/vincent119/tlscheck.git
+cd tlscheck
+```
+
+Windows PowerShell:
+
+```powershell
+go build -o bin/tlscheck.exe ./cmd/tlscheck
+.\bin\tlscheck.exe --version
+.\bin\tlscheck.exe --help
+```
+
+macOS / Linux:
+
+```sh
+go build -o bin/tlscheck ./cmd/tlscheck
+./bin/tlscheck --version
+./bin/tlscheck --help
+```
+
+Linux amd64/arm64 cross-builds pass, but native Linux execution and installation remain unverified. Linux is outside the macOS/Windows release archive matrix. A plain source build reports `development` and `unknown` unless version metadata is injected. See the [platform status](docs/releasing.md#platform-status).
+
+## Development and verification
+
+```sh
 go test ./...
 go test -race ./...
 go vet ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 git diff --check
 ```
 
-Race detection requires a supported native Go toolchain and its C toolchain. Tests create synthetic certificates and loopback TLS servers; they do not depend on public services or add roots to the system store. macOS arm64/amd64 and Windows amd64 passed native Go tests, race detection, vet, Python regressions, isolated archive installation/same-version reinstallation, and CLI version checks. All four snapshot targets were built and verified; Windows arm64 is cross-build only. Real Console operation, full interactive shell completion, and package-manager installation/upgrades still need acceptance testing.
+The dedicated workflow runs `govulncheck` against the [Go vulnerability database](https://go.dev/security/vuln/database) for all four packaged targets, failing when it reports an applicable reachable vulnerability or cannot complete the scan for the configured Go version and target. Its badge reflects workflow runs, not a guarantee that all security issues have been found. Check the workflow run for the exact source commit being released. No coverage percentage is published.
 
-Optional GNU Make targets are `make help`, `make build`, `make test`, `make vet`, `make check`, and `make fmt`. `make build` writes `bin/tlscheck`; Windows users should use the explicit PowerShell build above for the `.exe` suffix. Keep generated binaries in `bin/`, release outputs in `dist/`, and private local files in ignored `local/`. Certificate/key extensions are not globally ignored, allowing intentional synthetic fixtures.
+The [2026-11-20 cross-platform run](https://github.com/vincent119/tlscheck/actions/runs/44693571937), at commit `6394a47`, passed seven jobs covering packaging, native ordinary/race tests, isolated archive installation, configuration preservation, and HTML-script regressions. macOS arm64/amd64 and Windows amd64 have native CI evidence. Windows arm64 has cross-build evidence only. Interactive Console checks, manual HTML/table readability, and real package-manager installation/upgrades remain outside that evidence. Race detection needs a supported native Go and C toolchain.
 
-See the bilingual [release maintenance guide](docs/releasing.md) for packaging, upgrade, verification and retry status. When changing behavior, update both README files and corresponding maintenance instructions together.
+Use `make help` for optional GNU Make commands. Binaries go in `bin/`, snapshot archives in `dist/`, and private local inputs can go in the ignored `local/` directory. Read the [release maintenance guide](docs/releasing.md) for packaging and retry procedures. This README describes the current CLI. Release archives require version and checksum verification. Signing and notarization are not provided.
 
 ## License
 
-[Apache License 2.0](LICENSE). The license retains its official English text.
+[Apache License 2.0](LICENSE).

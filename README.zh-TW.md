@@ -1,219 +1,257 @@
 # tlscheck
 
+tlscheck 用來檢查遠端 TLS 憑證、本機憑證鏈與憑證／私鑰配對。遇到 TLS 連線錯誤、部署前確認到期日，或想知道伺服器是否送出預期的憑證，都可以用它查核。
+
+[![CI](https://github.com/vincent119/tlscheck/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vincent119/tlscheck/actions/workflows/ci.yml)
+[![Go 漏洞掃描](https://img.shields.io/github/actions/workflow/status/vincent119/tlscheck/go-vulnerability.yml?branch=main&label=Go%20%E6%BC%8F%E6%B4%9E%E6%8E%83%E6%8F%8F&logo=githubactions)](https://github.com/vincent119/tlscheck/actions/workflows/go-vulnerability.yml)
+[![Go](https://img.shields.io/badge/Go-1.27.0%2B-00ADD8?logo=go&logoColor=white)](go.mod)
+[![授權](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-vincent119%2Ftlscheck-181717?logo=github)](https://github.com/vincent119/tlscheck)
+[![Stars](https://img.shields.io/github/stars/vincent119/tlscheck?style=flat&logo=github)](https://github.com/vincent119/tlscheck/stargazers)
+
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-tlscheck 是 Go CLI，用於診斷遠端 TLS 憑證、檢查本機憑證與私鑰配對。握手事實與系統信任分開呈現，本機私鑰不參與遠端連線。
+預設以表格呈現，也能輸出 JSON、離線 HTML 與 Markdown。訊息支援英文、繁體中文和簡體中文。遠端握手的觀測結果與信任驗證分開顯示，本機私鑰只留在本機。
 
-## 建置與開始使用
+## 安裝
 
-需要 Go 1.27.0 以上版本。Go 1.27.4 已在 macOS arm64／amd64 與 Windows amd64 的 CI 驗證。以下指令從 repository 根目錄執行；GNU Make 為選用工具。
+以下是預定的套件安裝方式。**Homebrew／Scoop 套件目前尚未發布驗證，請待套件上架後再使用。** macOS／Windows 執行檔及 `checksums.txt` 請從 [GitHub Releases](https://github.com/vincent119/tlscheck/releases)取得。 現階段可[從原始碼建置](#從原始碼建置)。壓縮檔校驗與發佈準備見[發佈手冊](docs/releasing.zh-TW.md)。
 
-macOS：
-
-```sh
-go build -o bin/tlscheck ./cmd/tlscheck
-./bin/tlscheck
-./bin/tlscheck --version
-```
-
-Windows 使用 PowerShell：
+### Windows（Scoop）
 
 ```powershell
-go build -o bin/tlscheck.exe ./cmd/tlscheck
-.\bin\tlscheck.exe
-.\bin\tlscheck.exe --version
+scoop bucket add tlscheck 'https://github.com/vincent119/scoop-bucket'
+scoop install tlscheck/tlscheck
+tlscheck --version
 ```
 
-不帶參數會顯示說明並回傳 0。未修改的開發建置顯示版本 `development`、來源 commit `unknown`。`--help`／`-h` 顯示說明，`--version`／`-V` 顯示版本；可搭配 `--language`／`-L`，不得混用檢查目標或一般檢查旗標。未知旗標與無效組合回傳 2。本機檔名若以 `-` 開頭，可加上 `./`、`.\` 路徑前綴，或放在 `--` 後。
-
-目前可從原始碼建置。2026-11-18 的[跨平台 CI](https://github.com/vincent119/tlscheck/actions/runs/44285001106)（來源 `a1cff07`）已通過四目標 snapshot 封裝與校驗，以及 macOS arm64／amd64、Windows amd64 的原生測試、隔離壓縮檔安裝／同版本重裝及設定保留檢查。Windows arm64 僅交叉建置。正式 Release、Homebrew／Scoop 安裝升級、簽章與公證尚未驗證；真實 Console 與完整 shell 補全互動仍待驗收。驗證紀錄與限制見[安裝與發佈維護](docs/releasing.zh-TW.md)。
-
-## 檢查目標與檔案
-
-以下範例需要自行準備本機檔案，或能連線到指定服務。公開網路範例僅示範用法，不代表安裝或連線驗證證據。
-
-macOS：
+### macOS（Homebrew）
 
 ```sh
-./bin/tlscheck example.com 'https://example.com:8443/'
-./bin/tlscheck 192.0.2.10 '[2001:db8::1]:443' '例子.測試'
-./bin/tlscheck ./local/site.pem ./local/intermediate.pem ./local/site.key
-./bin/tlscheck ./local/root.cer
-./bin/tlscheck ./local/site.pem example.com ./local/site.key
-./bin/tlscheck ./local/missing.pem
-printf '%s\n' "$?"
+brew tap vincent119/tap
+brew install vincent119/tap/tlscheck
+tlscheck --version
 ```
 
-Windows PowerShell：
+### Linux
 
-```powershell
-.\bin\tlscheck.exe example.com 'https://example.com:8443/'
-.\bin\tlscheck.exe 192.0.2.10 '[2001:db8::1]:443' '例子.測試'
-.\bin\tlscheck.exe .\local\site.pem .\local\intermediate.pem .\local\site.key
-.\bin\tlscheck.exe .\local\root.cer
-.\bin\tlscheck.exe .\local\site.pem example.com .\local\site.key
-.\bin\tlscheck.exe .\local\missing.pem
-$LASTEXITCODE
+目前尚未提供 Linux 套件或發佈壓縮檔。現有 Homebrew Formula 只支援 macOS，不能當作 Linuxbrew 安裝方式；可用的建置指令見[從原始碼建置](#從原始碼建置)。
+
+## 常用檢查
+
+以下以安裝後的 `tlscheck` 指令示範。原始碼建置請改用 macOS／Linux 的 `./bin/tlscheck` 或 Windows 的 `.\bin\tlscheck.exe`。遠端目標需要網路，本機路徑請換成自己的檔案。
+
+```sh
+tlscheck example.com 'https://example.com:8443/'
+tlscheck --local ./local/site.pem --local ./local/chain.pem --local ./local/site.key
+tlscheck --local ./local/site.pem --detail full -L zh-TW
+tlscheck --remote example.com --expiry-warning-days 14 --fail-on-expiry-warning
 ```
 
-IP 範例使用文件保留位址，需替換成可連線目標。缺檔範例會回傳 2。站台憑證與私鑰即使配對成功，信任驗證仍可能失敗。
+表格詳細程度預設為 `summary`，會減少重複的成功敘述，保留失敗、提醒與驗證限制。需要全部明細及診斷代碼時，使用 `--detail full`。這個參數只影響 table，其他格式維持完整內容。
 
-既有檔案優先於網路辨識。缺少的明確路徑，以及不存在的 `.pem`、`.cer`、`.crt`、`.key` 檔名均視為檔案錯誤，不轉作網路目標。只接受一般檔案。其他輸入視為 DNS 名稱、經 IDNA 正規化的 Unicode IDN、IPv4、IPv6、`localhost` 或單標籤主機名稱。不支援 IPv6 區域識別碼。
+到期提醒預設為 30 天，提醒本身不改變結束碼。加上 `--fail-on-expiry-warning` 後，提醒會使檢查回傳 1，也涵蓋已解析的 CA 與中繼憑證。`--expiry-warning-days 0` 會停用提醒及這項政策，過期檢查仍會執行。
 
-HTTPS URL 必須使用標準 `https://`；預設連接埠為 443，明確指定的連接埠必須是 1–65535 的整數。接受尾端 `/`。URL 帳密、路徑、查詢參數與片段在連線及報告前自動去除。不支援其他 URL scheme。請避免將帳密放進命令：即使報告會去除，shell 歷史仍可能保存原始輸入。
+自動辨識會優先讀取已存在的檔案。用 `--remote` 強制當作遠端目標，或用 `--local` 強制讀取本機檔案。檔名以 `-` 開頭時，請加上 `./`、`.\`，或放在 `--` 後面。
 
-| 本機物件 | 支援格式 | 編碼 |
+目標接受 DNS 名稱、經 IDNA 轉換的 Unicode 網域、IPv4、IPv6、`localhost` 與單段主機名稱。IPv6 帶連接埠時使用方括號，例如 `[2001:db8::1]:8443`；不接受 zone。這些 IP 是文件用位址，實際執行時須換成可連線的目標。
+
+URL 必須使用標準 `https://`。預設連接埠為 443，指定值限 1–65535。連線與報告前會去除帳密、路徑、查詢參數及片段；shell 歷史仍可能保留原始指令，請勿將帳密寫進目標 URL。
+
+## 批次目標與部署比對
+
+目標清單使用 UTF-8，每行一個遠端目標。空白行及整行 `#` 註解會略過。每行只當作目標值，不會執行 shell 指令或解析成 CLI 旗標。
+
+```text
+# targets.txt
+example.com
+https://example.org:8443/
+```
+
+```sh
+tlscheck --targets-file ./targets.txt
+tlscheck --targets-file ./targets.txt --concurrency 4 -f json
+tlscheck --targets-file ./targets.txt --connect-ip 0=192.0.2.10 --compare-cert 0=./local/expected.pem
+tlscheck --remote example.com --compare-cert 0=./local/expected.pem
+```
+
+遠端預設循序檢查。`--concurrency` 接受 1–32；即使完成順序不同，報告仍依輸入順序排列。可重複指定 `--targets-file`，也能混合直接遠端與本機輸入。
+
+映射格式為 `INDEX=VALUE`。所有清單展開後，統一從 0 編號，本機輸入及無效的非空目標行也占索引。相同網域重複出現時，各自保留獨立位置。映射只在第一個 `=` 分割，因此候選路徑可含空白、其他等號與 Windows 磁碟代號。
+
+`--connect-ip INDEX=IP` 只改該目標的連線位置，SNI 與名稱驗證仍使用原網域，連接埠也沿用原目標。指定後不查 DNS、不回退其他位址。IP 須為純 IPv4 或 IPv6 literal，不帶方括號、zone 或連接埠。報告會分開顯示要求的 IP 與實際觀測到的 peer 位址。
+
+`--compare-cert INDEX=PATH` 使用同一次 TLS 握手的葉憑證，與候選的完整憑證 DER 比較。同公鑰續期後仍是不同憑證。候選接受 PEM／DER 憑證或 PEM 鏈，完整 DER 去重後須恰有一張非 CA 憑證。混有私鑰、損壞區塊、其他容器、多張葉憑證或純 CA 的候選會被拒絕。候選不會加入本機配對集合或信任庫。
+
+比對相同時仍可能信任失敗。憑證不同回傳 1，連線失敗回傳 2；未觀測到葉憑證時，比對顯示未執行。重複映射、綁到本機或無效目標、超出索引範圍，都會在網路檢查前拒絕。
+
+## 本機格式與 PFX 密碼
+
+| 物件 | 支援格式 | 編碼 |
 |---|---|---|
-| X.509 憑證，包含 CA | 憑證 | PEM、DER |
+| X.509 憑證，包含 CA | 憑證或 PEM 鏈 | PEM、DER |
 | RSA 私鑰 | PKCS#1、PKCS#8 | PEM、DER |
-| ECDSA 私鑰 | SEC1、PKCS#8；NIST P-224/P-256/P-384/P-521 | PEM、DER |
+| ECDSA 私鑰 | SEC1、PKCS#8，NIST P-224/P-256/P-384/P-521 | PEM、DER |
 | Ed25519 私鑰 | PKCS#8 | PEM、DER |
+| PKCS#7／P7B | 僅含憑證的 SignedData | PEM、DER |
+| PKCS#12／PFX | 一把私鑰搭配憑證，或純憑證容器 | DER |
 
-接受多個 PEM 區塊。部分區塊損壞或不支援時，仍保留有效物件，最終結束碼為 2。不支援加密私鑰，不嘗試解密，也不提示輸入密碼。不支援 PKCS#12/PFX 與其他私鑰演算法。
+一般 PEM 解析遇到損壞或不支援區塊時，會保留其他有效物件，結束碼為 2。PFX 採原子解碼，失敗的容器不提供部分私鑰或憑證。不支援獨立加密私鑰檔案的解密；PFX 解密限於支援的容器格式。
 
-## 完整參數與輸出
+```sh
+tlscheck --local ./local/chain.p7b
+tlscheck --local ./local/identity.pfx --ask-password 0
+tlscheck --local ./local/identity.pfx --password-file '0=./local/pfx-password.txt'
+```
 
-| 參數 | 短參數 | 預設／用途 |
+PFX 未指定密碼來源時，會嘗試空密碼。`--ask-password INDEX` 以無回顯方式讀取，必須連接終端。不提供明文密碼旗標或密碼環境變數。密碼檔須為權限受限的一般檔案，且不可與輸入、候選憑證、目標清單或設定檔互為別名。Unix 須由目前使用者擁有，並使用只有擁有者能存取的權限，例如 `0600`。Windows 的擁有者及 ACL 允許項目限於目前使用者、SYSTEM 或 Administrators。
+
+密碼檔使用 UTF-8、無 BOM，只移除最後一組 LF 或 CRLF，其餘空白保留。密碼上限為 4 KiB，僅接受不含 NUL 的 BMP 字元，不支援 emoji 等非 BMP 字元。PFX 支援 PBES2、PBKDF2-HMAC-SHA-256、AES-256-CBC 與 SHA-256 MAC，不支援舊式 RC2／3DES、SHA-1 組合。舊容器被拒絕時，請改用現代加密設定重新匯出。
+
+## 完整參數
+
+| 參數 | 短旗標 | 預設或用途 |
 |---|---|---|
-| `[target-or-file]...` | | 自動辨識，既有檔案優先 |
-| `--remote TARGET` | `-r` | 強制遠端，可重複，不讀同名本機檔案 |
-| `--local PATH` | `-l` | 強制本機，可重複，缺檔不連線 |
-| `--language CODE` | `-L` | 本次語系，en／zh-TW／zh-CN |
-| `--format FORMAT` | `-f` | table（預設）／json／html／markdown |
-| `--output PATH` | `-o` | 預設 `-`，代表 stdout |
-| `--overwrite` | | 預設關閉，須搭配非 `-` 的 output |
-| `--timeout DURATION` | `-t` | 10s，範圍 1ms–5m |
-| `--expiry-warning-days DAYS` | | 30，範圍 0–36500，0 停用提醒 |
-| `--settings` | `-s` | 獨立互動語系／theme 設定 |
-| `--help` | `-h` | 說明，結束碼 0 |
-| `--version` | `-V` | 版本，結束碼 0 |
-| `--` | | 之後全視為位置輸入 |
+| `[target-or-file]...` | | 自動辨識，已存在檔案優先 |
+| `--remote TARGET` | `-r` | 遠端輸入，可重複 |
+| `--local PATH` | `-l` | 本機檔案，可重複 |
+| `--targets-file PATH` | | 目標清單，可重複 |
+| `--concurrency N` | | 1，範圍 1–32 |
+| `--connect-ip INDEX=IP` | | 逐目標連線位址，可重複 |
+| `--compare-cert INDEX=PATH` | | 逐目標預期憑證，可重複 |
+| `--password-file INDEX=PATH` | | 受保護的 PFX 密碼檔，可重複 |
+| `--ask-password INDEX` | | PFX 隱藏密碼提示，可重複 |
+| `--language CODE` | `-L` | 單次覆寫為 `en`、`zh-TW` 或 `zh-CN` |
+| `--format FORMAT` | `-f` | `table`、`json`、`html`、`markdown`，預設 `table` |
+| `--detail LEVEL` | | `summary` 或 `full`，預設 `summary`，只影響 table |
+| `--output PATH` | `-o` | `-` 代表 stdout |
+| `--overwrite` | | 允許覆寫既有報告 |
+| `--timeout DURATION` | `-t` | 每目標 10s，範圍 1ms–5m |
+| `--expiry-warning-days N` | | 30，範圍 0–36500，0 停用提醒 |
+| `--fail-on-expiry-warning` | | 到期提醒改為失敗 |
+| `--settings` | `-s` | 互動語系與選單主題設定 |
+| `--help` | `-h` | 顯示說明 |
+| `--version` | `-V` | 顯示版本 |
+| `--` | | 其後全部當作位置輸入 |
 
-位置、remote 與 local 依命令列出現順序檢查，不去重。remote/local 每次只接受一個值，逗號不拆分。其餘旗標不得重複；無值布林旗標不能寫成 `--overwrite=true`。必填值不可省略或設為空字串，包含 `--remote=`／`--local=`；此類錯誤不建立報告檔。`--settings` 不與檢查／語系旗標混用；`--settings --help` 可不進選單查看說明。只有語系旗標時顯示說明；只有一般執行旗標卻無目標時回傳 2。
+每個可重複旗標一次只接一個值，其餘旗標不得重複。布林旗標不接受值，例如 `--overwrite=true` 會被拒絕。說明與版本可搭配語系，但不可混用執行旗標或檢查目標。`--settings` 為獨立操作，`--settings --help` 可在不開啟選單的情況下查看說明。不帶參數時顯示說明並回傳 0。
 
-```sh
-./bin/tlscheck -r example.com --local ./local/site.pem -L zh-TW
-./bin/tlscheck 'https://example.com:8443/' -t 5s --expiry-warning-days 14
-./bin/tlscheck -l ./local/site.pem -f json -o ./report.json
-./bin/tlscheck -l ./local/site.pem -f html -o ./report.html --overwrite
-./bin/tlscheck -l ./local/site.pem -f markdown
-./bin/tlscheck --settings
-```
-
-報告格式不依副檔名猜測。output 父目錄必須已存在；不展開 `~`。預設不覆蓋既有檔案；拒絕目錄、特殊檔案、symlink，以及與輸入／設定同檔或 hardlink 的目的地。完整序列化、暫存寫入、同步與關閉成功後才提交；若輸出失敗，程序回傳 2。JSON 的 `summary.check_exit_code` 只描述檢查結果，程序另可能因 I/O 失敗回傳 2。macOS 新報告檔使用 0600 並移除繼承 ACL；覆寫時保存原生 ACL、擁有者及群組。若安全屬性無法可靠保存，或 ACL 會妨礙提交／失敗清理，會拒絕覆寫並保留原檔。Windows 使用受保護 DACL 並檢查既有安全屬性；唯讀目的檔透過相對既有目錄 handle 的原子替換保存唯讀屬性與 DACL，不先移除原檔或清除其唯讀屬性。不支援此操作的 Windows／檔案系統會安全失敗；唯讀替換、DACL 保存與失敗清理已通過 Windows amd64 CI 回歸。檢查到目的地快照變更即停止；快照與重新命名之間不具有對任意外部程序的 compare-and-swap 保證。
-
-JSON 為單一 UTF-8 物件、兩空格縮排及檔尾換行，固定 `schema_version: 1`。頂層包含 `tool`、`generated_at`（UTC）、`language`、依序 `inputs`、`local`、`remote` 與 `summary`。狀態固定為 `passed`／`failed`／`not_performed`；嚴重度為 `none`／`verification`／`execution`。代碼固定、說明依語系翻譯，空集合為 `[]`，未觀測 TLS 為 `null`。`advice` 為 `null` 或 `{ "code": "advice.…", "message": "…" }`，代碼不隨語系變更。table／HTML／Markdown 另有逐輸入結果與最高嚴重度摘要，以及 key ID／certificate ID 配對表；全域計數不因衍生視圖重複累計。table 將反斜線顯示為 `\\`、pipe 顯示為 `\u007c`，其他格式保留各自安全文字。憑證以完整 SHA-256 指紋識別，私鑰僅含逐來源識別碼與公開資訊；不輸出私鑰內容或原始完整 URL。HTML 不載入外部資源、不執行 JavaScript，也不自動開瀏覽器。
-
-## 指令自動完成
-
-`completion` 是保留的輔助子命令。檢查同名主機可用 `-r completion` 或 `-- completion`，同名檔案可用 `-l completion`。`completion SHELL --help`／`-h` 顯示該層說明。隱藏補全不回顯原始錯誤；生成腳本的偵錯函式不寫檔，`BASH_COMP_DEBUG_FILE` 不會啟用寫入。補全不連線、不讀設定或憑證內容；檔名補全可列舉目錄。Bash 須先載入與其版本相容的 bash-completion，提供 `_get_comp_words_by_ref`／`_init_completion`；僅 source 產生的腳本不足以補齊此 shell 依賴。目前本機缺少該套件，Bash 只完成腳本語法與協定驗證。
-
-2026-11-19 本機驗收：macOS Zsh 5.9 的 10 項真正 Tab 案例通過，包含等號、短旗標及空白／Unicode 檔名。macOS PowerShell 7.5.2 已通過 30 項原生補全引擎驗收，涵蓋含描述／不含描述腳本。無候選且禁止檔名回退時，回傳保留已有字詞的占位；空游標處可能多一個空白，不增加參數或回退檔名，`--local`／`--output` 的正常檔名補全保留。Windows PowerShell 引擎與 Console 實機互動仍待驗證。
-
-四種 shell 皆支援 `--no-descriptions` 及 `-L`／`--language`，不接受一般檢查旗標。
+## 儲存報告
 
 ```sh
-# Bash
-source <(./bin/tlscheck completion bash)
-# Zsh
-source <(./bin/tlscheck completion zsh)
-# Fish
-./bin/tlscheck completion fish | source
-# 只產生不含描述的腳本
-./bin/tlscheck completion zsh --no-descriptions
+tlscheck --local ./local/site.pem -f json -o ./report.json
+tlscheck --local ./local/site.pem -f html -o ./report.html --overwrite
+tlscheck --local ./local/site.pem -f markdown
 ```
 
-PowerShell：
+格式由 `--format` 決定，不依副檔名推斷。`--output` 將報告寫入指定檔案，stdout 保持空白。父目錄必須已存在，覆寫既有檔案須加 `--overwrite`；不展開 `~`。
 
-```powershell
-.\bin\tlscheck.exe completion powershell | Out-String | Invoke-Expression
-```
+輸出會拒絕符號連結、特殊檔案，以及受保護輸入、候選、清單、密碼或設定檔的別名。完整報告序列化後才寫入暫存檔並提交。替換時會保留必要的原生安全屬性，無法保留則安全失敗。偵測到目的地變動會停止寫入；最後的快照檢查與重新命名，不保證能原子地防止任意外部程序競爭。
 
-以上在目前 shell 載入；持久啟用時將對應指令加入自己的 shell 啟動檔。腳本生成及本機可用 shell 的語法驗證，不等於 Windows／Fish 原生互動已通過。
+JSON 使用 `schema_version: 1`、穩定代碼與識別碼、UTC 時間，空集合為 `[]`，未觀測事實為 `null`。訊息依語系翻譯。新模式分別加入可選的 `inputs[].list_source`、`remote[].connection`、`remote[].comparison`，未使用時省略。嚴格拒絕未知欄位的消費者須配合更新。`summary.check_exit_code` 只涵蓋檢查結果，後續輸出失敗仍可使程序回傳 2。
 
-## 語系設定
+HTML 為獨立離線文件，沒有 JavaScript 或外部資源，也不會自動開啟瀏覽器。所有格式都排除私鑰內容，目標 URL 的帳密與查詢參數會先移除。逐輸入計數可能因本機共用檢查而重疊，全域總數請看彙整結果。
 
-本次語系可用 `--language en|zh-TW|zh-CN`／`-L` 指定，優先於 JSON 與預設英文。有效 CLI 語系不讀取設定檔，也不儲存。不支援語系環境變數或自訂設定路徑；平台目錄由 `os.UserConfigDir()` 決定。
+## 語系與指令補全
+
+使用 `-L zh-TW`、`-L zh-CN` 或 `-L en` 覆寫單次語系。有效 CLI 語系不讀取設定檔，也不儲存。未指定時，以 JSON 語系設定優先於預設英文；不支援自訂設定路徑或語系環境變數。
 
 | 平台 | 設定檔 |
 |---|---|
 | macOS | `~/Library/Application Support/tlscheck/config.json` |
 | Windows | `%AppData%\tlscheck\config.json` |
 
-執行 `tlscheck --settings`／`-s` 開啟互動選單。stdin 與 stderr 都必須連接終端；選單使用 stderr，stdout 保持空白。方向鍵移動、Enter 選擇、Esc 返回或取消、Ctrl+C 取消、`t` 開啟 theme。macOS 終端斷線會退出且不儲存。僅選擇「儲存並離開」才寫入設定，取消不寫。損壞或有未知欄位的既有設定須先手動修復。theme 為 `normal`／`dark`／`light`，只影響選單。也可手動建立 UTF-8、無 BOM 的 JSON：
-
-```json
-{"language":"en"}
-```
-
 ```json
 {"language":"zh-TW","theme":"normal"}
 ```
 
-```json
-{"language":"zh-CN"}
+`--settings` 的 stdin 與 stderr 都須連接終端。可用方向鍵、Enter、Esc、Ctrl+C，或按 `t` 選擇主題。只有「儲存並離開」才寫入 `config.json`，取消維持原設定。`normal`、`dark`、`light` 三種主題只影響選單。損壞的設定須先修復再儲存。缺少設定時使用英文與 normal；無效或不可讀的設定會在 stderr 提醒並採安全預設值，不單獨改變結束碼。設定上限為 64 KiB。
+
+在目前 shell 載入補全：
+
+```sh
+# Bash，須先載入相容的 bash-completion 套件
+source <(tlscheck completion bash)
+# Zsh，須先執行 compinit
+source <(tlscheck completion zsh)
+# Fish
+tlscheck completion fish | source
 ```
 
-| 條件 | 行為 |
-|---|---|
-| 缺檔、缺少 `language` 或空字串 | 使用英文，不提醒 |
-| 目錄取得、讀取、stat、close 錯誤或非一般檔案 | 英文提醒並回退 |
-| 實際資料超過 64 KiB | 英文提醒並回退 |
-| JSON／UTF-8 無效、根不是物件或有尾隨資料 | 英文提醒並回退 |
-| 非字串值（包含 `null`）、未知或重複鍵 | 英文提醒並回退 |
-| 除精確的 `en`、`zh-TW`、`zh-CN` 或空字串以外的值 | 英文提醒並回退 |
+```powershell
+tlscheck completion powershell | Out-String | Invoke-Expression
+```
 
-缺少或空字串 theme 使用 normal；不支援的 theme 會提醒並使用 normal。一般檢查、查詢與補全不寫設定。
+四種 shell 產生腳本時都接受 `--no-descriptions` 與語系覆寫。補全不執行憑證檢查、不讀取設定或憑證內容，檔名補全可列舉目錄。PowerShell 無候選占位會保留已有字詞並禁止回退檔名補全，空游標處可能多一個空白。Windows 真正鍵盤 Tab、選單儲存及 Console 復原仍待人工驗收，Bash／Fish 的完整互動證據也尚未齊全。
 
-table／HTML／Markdown 的輸入模式、嚴重度、檢查名稱、階段與 URI 遮蔽原因依語系顯示；JSON 識別碼、設定值、憑證原值及路徑保持不變。語系選項保留母語名稱，theme 選項使用翻譯標籤。若本地與英文模板都無法呈現，最終保底提示也依有效語系顯示；未知語系使用英文，不回顯內部訊息代碼。
+## 信任、結果與限制
 
-設定提醒寫入 stderr，不單獨改變結束碼。缺少翻譯時回退英文。主機名稱、路徑、演算法與憑證公開原值保留原文；顯示時移除不安全的終端控制字元及 URL 附加內容。
+本機檔案共用憑證／私鑰集合，以標準化公開金鑰 DER 配對並列出所有匹配。只有私鑰或只有憑證時不要求配對，遠端憑證不與本機私鑰配對。同時提供私鑰與站台憑證時，每把私鑰及每張站台憑證都須有匹配項目。CA 可與私鑰配對，但不要求提供私鑰。
 
-## 信任與私鑰配對
-
-所有本機檔案形成共同的憑證／私鑰集合；遠端目標獨立且依序檢查。本機私鑰不會傳送作為 client authentication，也不與遠端憑證配對。
-
-信任使用作業系統信任庫。輸入根憑證只作為候選簽發者，不會自動變成受信任根。對端提供鏈表示伺服器實際送出的內容；已驗證鏈只在信任驗證成功後存在。握手完成或簽發者簽章鏈結有效，本身均不代表受信任。本機憑證沒有主機名稱輸入，因此名稱驗證顯示未執行。
-
-單獨 CA 必須通過適用的有效期間／CA 約束，並建立通往系統受信任根的路徑。沒有可信路徑為檢查失敗（1）；信任機制無法讀取或執行為執行錯誤（2）。macOS 的單獨 CA 使用內建 `/usr/bin/security` 的 CA／基本 X.509 政策，禁止網路補鏈，再由 Go 檢查鏈。受保護暫存檔只包含憑證，不包含私鑰。平台政策可能加入額外檢查；tlscheck 本身不主動透過 AIA 抓取簽發者，也不執行 CRL／OCSP 撤銷檢查。
-
-配對比較完整標準化公開金鑰 DER，不只比較演算法或位數，並列出所有匹配關係。重複憑證保留來源，私鑰逐來源保留。只有私鑰或只有憑證時不要求配對；私鑰與站台憑證同時存在時，每把私鑰與每張站台憑證均須有匹配項目。CA 可配對但不要求私鑰；只有 CA 加私鑰、沒有站台時，不要求完整覆蓋。無效私鑰不能產生成功配對。
-
-RSA 執行標準有效性檢查。ECDSA 檢查私密純量範圍、公開點是否位於曲線，以及兩者一致性。Ed25519 檢查長度與 seed 導出一致性。檢查只涵蓋解析後物件，不涵蓋解析器已捨棄或正規化的原始欄位，不證明亂數品質、保密性、密碼學強度或所有安全屬性。報告只顯示公開中繼資訊，不輸出私鑰內容。
-
-## 結果與限制
+信任來自作業系統信任庫，提供根憑證檔案不會安裝或信任該根。本機憑證檢查沒有主機名稱輸入。遠端依原目標身分驗證，握手完成本身不代表受信任。macOS 的單獨 CA 驗證使用 `/usr/bin/security`，禁止網路補鏈，再由 Go 檢查鏈。tlscheck 本身不主動透過 AIA 抓取簽發者，也不執行 CRL／OCSP 撤銷檢查。
 
 | 結束碼 | 意義 |
 |---|---|
-| 0 | 適用檢查通過、說明／版本／補全成功、設定儲存或取消，或只有到期／設定提醒 |
-| 1 | 憑證、私鑰、信任或配對檢查失敗 |
-| 2 | 輸入、解析、不支援格式、連線、逾時、取消或輸出錯誤 |
+| 0 | 適用檢查通過，或說明、補全、設定操作完成 |
+| 1 | 憑證、私鑰、信任、配對、部署比對或已啟用的到期政策失敗 |
+| 2 | 輸入、解析、不支援格式、網路、逾時、取消或輸出錯誤 |
 
-取最高等級：2＞1＞0。單項輸入失敗不停止其餘輸入；無效 CLI 旗標組合會在檢查前拒絕。狀態分為通過、失敗、未執行；未執行不等於通過，也不單獨造成失敗。彙整計數對應實際列出的檢查，不是輸入檔案數。
+取最高等級：2＞1＞0。只有提醒時回傳 0，除非已啟用到期失敗政策。未執行的檢查會明確標示。單項輸入錯誤仍可保留其他有效輸入；無效旗標、映射與全域資源超限，則在網路檢查前停止。設定提醒與執行診斷寫入 stderr，報告預設寫入 stdout，或由 `--output` 指定檔案。
 
-預設 table 報告與檢查失敗原因寫入 stdout。指定 `--output PATH` 時完整報告只寫入檔案，不在 stdout 顯示儲存提示。設定提醒與執行診斷寫入 stderr；執行錯誤可能同時出現在完整報告與診斷流。
+| 資源 | 上限 |
+|---|---|
+| 本機檔案或比對候選 | 每檔實際讀取 10 MiB |
+| 目標清單 | 每檔 1 MiB、每行 8 KiB，最多 200 份、合計 8 MiB |
+| 批次模式展開後輸入 | 1,000 筆，含本機輸入與無效目標行 |
+| 每個遠端目標 | DNS／TCP／TLS 共用期限，預設 10s |
 
-每份本機憑證／私鑰檔案的實際讀取上限為 10 MiB。每個遠端目標的 DNS／TCP／TLS 握手預設共用 10 秒期限（可用 `--timeout`／`-t` 調整至 1ms–5m），不是每個階段各 10 秒。平台信任操作有其平台取消限制。時間使用 UTC；剩餘天數向下取整，剛過期的憑證可顯示 -1 天。尚未過期且預設 30 × 24 小時內到期的憑證會提醒；`--expiry-warning-days` 可設 0–36500，0 停用提醒但保留過期驗證，提醒本身不改變結束碼。
+PFX 解碼另有限制 ASN.1 深度、bag／憑證數、解密資料量及金鑰推導工作量。時間使用 UTC，剩餘天數向下取整。平台信任 API 有其取消限制。
 
-報告支援 table、JSON、獨立離線 HTML 與 GFM Markdown，不含終端色彩或動畫。tlscheck 不申請、續期或部署憑證，不檢查網頁內容、不掃描加密套件、不解密私鑰，也不管理系統信任。規劃首版產物未簽章、未公證；目前沒有已驗證的簽章／公證發佈版本。
+tlscheck 不產生 CSR、私鑰或憑證，不更新部署、不檢查網頁內容或掃描加密套件，也不管理系統信任。密碼學檢查涵蓋解析後物件與公鑰一致性，不證明私鑰保密性或亂數品質。
 
-## 開發與維護
+## 從原始碼建置
 
-兩種平台安裝 Go 後，均可從 repository 根目錄執行：
+需要 Go 1.27.0 以上版本，CI 使用 Go 1.27.4。取得 repository 後，從根目錄執行：
 
-```text
+```sh
+git clone https://github.com/vincent119/tlscheck.git
+cd tlscheck
+```
+
+Windows PowerShell：
+
+```powershell
+go build -o bin/tlscheck.exe ./cmd/tlscheck
+.\bin\tlscheck.exe --version
+.\bin\tlscheck.exe --help
+```
+
+macOS／Linux：
+
+```sh
+go build -o bin/tlscheck ./cmd/tlscheck
+./bin/tlscheck --version
+./bin/tlscheck --help
+```
+
+Linux amd64／arm64 交叉建置已通過，尚未驗證 Linux 原生執行或安裝，也未納入 macOS／Windows 發佈壓縮檔矩陣。一般原始碼建置未注入版本資訊時，顯示 `development` 與 `unknown`。各平台狀態見[發佈文件](docs/releasing.zh-TW.md#平台狀態)。
+
+## 開發與驗證
+
+```sh
 go test ./...
 go test -race ./...
 go vet ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 git diff --check
 ```
 
-race 偵測需要支援的原生 Go 與 C 工具鏈。測試使用合成憑證與 loopback TLS 服務，不依賴公開服務，也不將根加入系統。macOS arm64／amd64 與 Windows amd64 已通過原生 Go 測試、race、vet、Python 回歸、隔離壓縮檔安裝／同版本重裝及 CLI 版本檢查。四目標 snapshot 均已建置與核對；Windows arm64 僅交叉建置，真實 Console、完整 shell 補全與套件管理器安裝升級仍待驗收。
+`govulncheck` 依目前 Go 版本與建置目標，向 [Go 漏洞資料庫](https://go.dev/security/vuln/database)檢查可達的已知漏洞。獨立 workflow 掃描四種封裝目標，發現適用漏洞或掃描無法完成時會失敗。徽章反映實際執行結果，不代表已找到所有安全問題；請核對欲發佈來源 commit 對應的 workflow 結果。目前未發布測試覆蓋率百分比。
 
-選用 GNU Make 指令包含 `make help`、`make build`、`make test`、`make vet`、`make check`、`make fmt`。`make build` 產生 `bin/tlscheck`；Windows 請使用前述明確的 PowerShell 建置指令取得 `.exe` 副檔名。建置產物放 `bin/`、發佈產物放 `dist/`，私有本機檔案放已忽略的 `local/`。不全面忽略憑證／私鑰副檔名，以保留刻意建立的合成 fixture。
+[2026-11-20 跨平台 CI](https://github.com/vincent119/tlscheck/actions/runs/44693571937)，來源 `6394a47`，七項工作全數通過，涵蓋封裝、原生普通／race 測試、隔離壓縮檔安裝、設定保留與 HTML 腳本回歸。macOS arm64／amd64 與 Windows amd64 有原生 CI 證據，Windows arm64 僅有交叉建置證據。這些結果不涵蓋真實 Console、HTML／表格人工可讀性或套件管理器安裝升級。race 偵測需要支援的原生 Go 與 C 工具鏈。
 
-封裝、升級、驗證與重試狀態見雙語[發佈維護文件](docs/releasing.zh-TW.md)。行為變更時，請同步更新兩份 README 及對應維護說明。
+選用 GNU Make 時可執行 `make help`。執行檔放在 `bin/`，snapshot 壓縮檔放在 `dist/`，私有本機輸入可放已忽略的 `local/`。封裝與重試程序見[發佈維護文件](docs/releasing.zh-TW.md)。本 README 以目前 CLI 為準，Release 壓縮檔須核對版本與校驗值，目前未提供簽章或公證。
 
 ## 授權
 
-[Apache License 2.0](LICENSE)，保留官方英文原文。
+[Apache License 2.0](LICENSE)。

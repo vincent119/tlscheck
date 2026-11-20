@@ -1,151 +1,131 @@
-# Installation and release maintenance
+# Installation and release preflight
 
 [English](releasing.md) | [繁體中文](releasing.zh-TW.md) | [README](../README.md)
 
-This guide is for maintainers preparing macOS and Windows distribution and users evaluating installation options. The CLI can be built from source. The 2026-11-18 [cross-platform CI run](https://github.com/vincent119/tlscheck/actions/runs/44285001106) (source `a1cff07676d94c4ac7e663bec5ea83c8584d42a9`, attempt 1) passed all jobs: four-target snapshot packaging and checksums, plus native tests and isolated installation/same-version reinstallation on macOS arm64/amd64 and Windows amd64. Windows arm64 is cross-build only; official releases, package-manager installation/upgrades, and real interactive operation remain unverified. Do not interpret the templates below as available packages.
+Start with the platform installation below. Maintainers should complete the release checklist before creating a tag or enabling publication. This guide documents the current controls and the evidence still needed, without authorizing a release.
 
-## Available installation and upgrade
+## Package installation
 
-Use the source-build commands in the [README](../README.md). To upgrade a local build, retain a copy of the previous binary, build the reviewed source revision, check `--version`, then replace your executable after validation. The configuration file is outside the repository; ordinary checks do not modify it, and only an explicit save in `--settings` writes it. Restoring the previous binary rolls back the executable; no database migration is involved.
+**Homebrew/Scoop packages are not published or verified yet.** Download macOS/Windows archives and SHA-256 checksums from [GitHub Releases](https://github.com/vincent119/tlscheck/releases). These are the intended user installation commands, to use after the package and its release assets are verified. Source builds are covered [later in this guide](#source-builds), and the [README installation section](../README.md#installation) uses the same commands.
 
-Release archive installation will require a confirmed version, real download URL, matching platform/architecture and SHA-256 checksum from the release. On macOS compare the archive using `shasum -a 256`; on Windows PowerShell use `Get-FileHash -Algorithm SHA256`. A checksum establishes integrity relative to the published checksum, not publisher authentication. Initial artifacts are planned to be unsigned and unnotarized. CI verified snapshot archive names, contents, checksums, and isolated installation on three native platforms. Official release downloads, Gatekeeper handling, and upgrades between published versions still require separate validation.
+### Windows (Scoop)
 
-## Package-manager templates, not ready to run
+```powershell
+scoop bucket add tlscheck 'https://github.com/vincent119/scoop-bucket'
+scoop install tlscheck/tlscheck
+tlscheck --version
+```
 
-The destinations are confirmed as `vincent119/homebrew-tap` (`Formula/tlscheck.rb`) and `vincent119/scoop-bucket` (`bucket/tlscheck.json`). A published tlscheck package, release URL and installation are not yet verified. The following commands describe the intended interface; wait for a validated release before running them.
-
-Homebrew on macOS, prospective install and upgrade:
+### macOS (Homebrew)
 
 ```sh
 brew tap vincent119/tap
 brew install vincent119/tap/tlscheck
+tlscheck --version
+```
+
+### Linux
+
+Linux has no package or release archive in the current matrix. The Homebrew Formula has only an `on_macos` definition and does not provide a Linuxbrew installation. Use the [source-build instructions](../README.md#build-from-source) with the stated native-acceptance limits.
+
+## Platform status
+
+| Platform | Source build | Native CI / installation | Release archive plan |
+|---|---|---|---|
+| Windows amd64 | Verified | Ordinary/race tests and isolated snapshot install/reinstall passed | ZIP |
+| Windows arm64 | Cross-build verified | Native acceptance pending | ZIP, cross-built |
+| macOS amd64 / arm64 | Verified | Ordinary/race tests and isolated snapshot install/reinstall passed | tar.gz |
+| Linux amd64 / arm64 | Cross-build verified | Native acceptance pending | Not configured |
+
+Use [GitHub Releases](https://github.com/vincent119/tlscheck/releases) to select a published version and its assets. The [2026-11-20 CI run](https://github.com/vincent119/tlscheck/actions/runs/44693571937), source `6394a47`, passed seven jobs across packaging, macOS/Windows native tests, and HTML-script regressions. It does not cover the current uncommitted changes or prove a published installation. Windows arm64 remains cross-build only. Manual Console, browser cleanup, and layout acceptance remain separate.
+
+The [README](../README.md) owns the CLI, formats, PFX password rules, and language settings. Use the version and source commit recorded with an acceptance result when deciding whether it applies to a release candidate.
+
+## Verify archives and upgrade
+
+After a release exists, select the exact OS, architecture, version, and real download URL. Compare the downloaded archive with that release's `checksums.txt` before extracting it.
+
+macOS:
+
+```sh
+shasum -a 256 tlscheck_*.tar.gz
+```
+
+Windows PowerShell:
+
+```powershell
+Get-FileHash .\tlscheck_*.zip -Algorithm SHA256
+```
+
+A matching checksum establishes agreement with the published hash. It does not authenticate the publisher. Current distribution plans are unsigned and unnotarized. Real release downloads, Gatekeeper behavior, and upgrades between published versions have not been accepted yet.
+
+Keep the previous executable until the replacement passes `--version` and a local check. Preserve `config.json` before and after installation. Ordinary CLI checks do not write it, and only an explicit settings save does. Restoring the old executable rolls back the binary, with no database migration.
+
+Homebrew and Scoop destinations are `vincent119/homebrew-tap` (`Formula/tlscheck.rb`) and `vincent119/scoop-bucket` (`bucket/tlscheck.json`). After verified packages are published, upgrades use:
+
+macOS Homebrew:
+
+```sh
 brew update
 brew upgrade vincent119/tap/tlscheck
 tlscheck --version
 ```
 
-Scoop on Windows PowerShell, prospective install and upgrade:
+Windows PowerShell Scoop:
 
 ```powershell
-scoop bucket add tlscheck 'https://github.com/vincent119/scoop-bucket'
-scoop install tlscheck/tlscheck
 scoop update
 scoop update tlscheck
 tlscheck --version
 ```
 
-Existing `config.json` contents must remain unchanged through install and upgrade. Package-manager rollback instructions require actual formula/manifest and version-retention evidence; they are not verified yet.
+Package-manager rollback needs verified package versions and retention behavior. Do not assume that replacing a source-built binary proves a Homebrew/Scoop upgrade or rollback.
 
-## Development validation
+## Source builds
 
-Run the Go test, race, vet and whitespace commands from the README before packaging. Keep test materials synthetic and private inputs outside tracked files. The application uses no public services in automated tests, but loopback binding is needed for TLS tests.
+[Build instructions](../README.md#build-from-source) cover Windows PowerShell, macOS, and Linux with Go 1.27.0 or newer. A plain source build reports `development` and `unknown` unless version metadata is injected. Linux amd64/arm64 cross-builds have been checked, while native Linux installation is unverified. Use explicit binary paths or an existing PATH directory without changing shell profiles during acceptance.
 
-The CI run above passed Go tests, race detection, vet, 27 Python regressions, native CLI version checks, and isolated snapshot installation/same-version reinstallation with configuration-preservation checks on macOS arm64/amd64 and Windows amd64. All four darwin/windows × amd64/arm64 targets were built and their SHA-256 checksums verified; Windows arm64 is cross-build only. Real Windows Console operation, Bash interaction with compatible completion dependencies loaded, Fish syntax and interaction, Windows PowerShell completion, and Homebrew/Scoop installation/upgrades still need acceptance records.
+## Before a release
 
-Local acceptance on 2026-11-19: Zsh 5.9 passed 10 actual Tab cases covering flags/values, equals syntax, `--`, stop conditions, and filenames with spaces/Unicode; only the hidden completion protocol ran, with configuration and the debug sentinel unchanged. Five macOS CLI/PTY scenarios covering arrows, language/theme previews, Esc, Ctrl+C, and cancellation passed with empty stdout, exit code 0, restored terminal configuration fields, and unchanged real configuration. Saving remains covered by isolated tests; no user configuration was saved. The empty-candidate compatibility issue is fixed locally on PowerShell 7.5.2: 30 native-engine checks passed across scripts with and without descriptions; Go regressions additionally cover equals syntax, quotes, a cursor inside the line, and unchanged AST arguments. The placeholder preserves an existing word, or adds one space at an empty cursor, without adding arguments or enabling file fallback; normal local/output filename completion is retained. Unknown generator templates stop output, without private reflection or dependency upgrades. The Windows engine/Console still needs native validation; the earlier passing CI does not validate this new fix on Windows. Bash lacks compatible bash-completion and Fish is not installed, so full interaction remains unverified for both.
+Every row below is a release preparation requirement. Record the candidate commit, version, build configuration, results, and links to evidence. An unresolved required check stops preparation until it passes or its scope is explicitly decided by the release owner. Paused acceptance work does not become a pass.
 
-## Release preparation and retry boundaries
-
-GitHub Actions CI and the GoReleaser v2.14.3 four-target trial build passed in the hosted run above. Its successful regressions cover the previous tool PATH, Windows file-replacement/IPv6, and Python encoding failures. This work has not performed an official release. Before a release, confirm tool versions, workflow permissions, real tap/bucket destinations and owners, version injection (`main.version`, `main.commit`), architecture matrix, archive contents, SHA-256 output and both language documents plus LICENSE. The initial target is v0.1.0, not an assertion that this version exists.
-
-Keep nonpublishing builds separate from tag creation, pushing, GitHub Releases and package-repository writes. Publishing needs explicit authorization. No release command is supplied until its configuration and permissions have been verified.
-
-On failure, record the source commit, intended version, failed stage and artifacts already published. Retry only the failed stage after checking existing assets and package versions. Do not recreate tags, overwrite different bytes under the same version, duplicate published assets, or downgrade a tap/bucket blindly. Prerelease filtering and idempotent retries must be tested with the actual workflow. Confirm downloads, checksums, package versions, installation, `--version` and unchanged configuration before declaring success.
-
-## Validation record and pending checks
-
-| Evidence | Current status |
-|---|---|
-| macOS arm64/amd64 native tests, race detection, CLI version | Passed CI |
-| Windows amd64 native tests, race detection, DACL/read-only replacement, CLI version | Passed CI |
-| Timeout options and expiry before DNS regressions | Named PASS without Skip in the latest normal/race runs on three platforms; Windows native verification complete |
-| Isolated snapshot installation/same-version reinstallation and configuration preservation on three native targets | Passed CI; upgrades between published versions unverified |
-| Four-target snapshot archives and SHA-256 | Passed CI; not officially published; Windows arm64 is cross-build only |
-| Named PowerShell main/subcase PASS without Skip | Verified six normal/race JSON files across three platforms; see evidence below |
-| Windows exe automated acceptance without Go | User-run native report: 53 PASS, 0 FAIL; versions, hashes and configuration fingerprints verified |
-| Real Console and full interactive shell completion | Pending; see development-validation scope |
-| Homebrew tap / Scoop bucket owners and repositories | Confirmed; no remote writes performed |
-| Homebrew/Scoop installation, cross-version upgrades and configuration preservation | Not verified |
-| Publishing, remote retry and prerelease behavior | Controlled regressions passed; actual publishing workflow unverified |
-
-Update this guide and its Chinese counterpart together when actual packaging and installation evidence becomes available. Do not mark distribution instructions complete solely because a command template exists.
-
-### Named PowerShell test evidence
-
-Native CI separately runs `go test -json -count=1 ./...` and `go test -race -json -count=1 ./...`, using `pipefail` and `tee` to preserve events and Go failures. Before testing, it checks that `pwsh` runs and prints its version; it does not install it automatically.
-
-`scripts/check_go_test_events.py` verifies each JSONL independently. In the exact package `github.com/vincent119/tlscheck/internal/app`, `TestPowerShellEmptyCandidatesDoNotFallbackToFiles`, `/包含描述`, and `/不含描述` must each have `run` followed by `pass`, with a completed package `pass`. Skips within the main test subtree, any test/build failure, missing events, duplicate or out-of-order events, malformed UTF-8/JSON, and size-limit violations fail verification. Package `ok` or PASS in output text cannot replace structured events.
-
-Each native job attempts to upload `go-test-events-<matrix.os>` on success or failure, containing only `go-test.jsonl` and `go-test-race.jsonl`, retained for seven days. Early failures may leave no event files; that is not a passing verification. After downloading, run from the repository root:
-
-```bash
-python3 -B scripts/check_go_test_events.py go-test.jsonl go-test-race.jsonl
-```
-
-Verified [CI 44454812073, attempt 2](https://github.com/vincent119/tlscheck/actions/runs/44454812073/attempts/2), at commit `9e7bc08118ed1ef0d441872cf2ea26c690c972d2`, with all four jobs successful. After downloading the three `go-test-events-<matrix.os>` artifacts, each of the six JSONL files was independently checked again:
-
-| Native platform | Normal tests | Race tests |
+| Step | Required check | Evidence / stop condition |
 |---|---|---|
-| macOS arm64 (macos-15) | Main test and both subcases PASS, no Skip | Main test and both subcases PASS, no Skip |
-| macOS amd64 (macos-15-intel) | Main test and both subcases PASS, no Skip | Main test and both subcases PASS, no Skip |
-| Windows amd64 (windows-2025) | Main test and both subcases PASS, no Skip | Main test and both subcases PASS, no Skip |
+| 1. Freeze the candidate | Reviewed source, clean worktree, chosen version, tag/source agreement | Record full commit and intended tag. Uncommitted content cannot be published as that commit. |
+| 2. Run code checks | Native ordinary/race tests, vet, Python/workflow regressions | Check actual named results and expected platforms. Missing, failed, or skipped required cases stop the release. |
+| 3. Check known Go vulnerabilities | All four packaged targets, matching candidate commit and configured Go toolchain | Require successful `govulncheck` results. Preserve findings and execution errors. Do not substitute an old green badge. |
+| 4. Build and inspect archives | Pinned GoReleaser, four target archives, metadata, files, SHA-256 | Verify source/version and archive contents, including both README and maintenance documents. |
+| 5. Check installation and acceptance | Isolated installation, configuration preservation, intended upgrade path, applicable manual checks | List OS/architecture and remaining Console/browser/layout gaps explicitly. |
+| 6. Check release controls | Release owner approval, environment reviewers/tag restrictions, package destinations and credentials | Verify the settings before enabling publication. Never put token values in logs or evidence. |
+| 7. Publish and verify | Exact authorized tag, downloaded assets, package versions, installation result | Publication and package updates are separate stages. A partial failure is not a completed release. |
 
-All 18 required named passes have preceding `run` events and completed package `pass` events, with no Skip in the main test subtree. The first macOS amd64 attempt failed on Go proxy DNS; successful events were obtained after the rerun. Closure relies on raw JSON, not package success in the older CI 44452386656. This completes the cross-platform engine portion of S09-T10. Real Windows Console/keyboard Tab, the settings menu, and other outstanding shell acceptance checks remain pending, so S09-T10 and S09 as a whole remain open.
+### Local checks
 
-### Native timeout regression acceptance
-
-[CI 44463960289](https://github.com/vincent119/tlscheck/actions/runs/44463960289) passed on its first attempt at commit `1bae9a18a85c60fd40bf38eedc24e1a948fd48a2`. All six normal/race JSON files across three platforms were individually checked: in `internal/check`, `TestRemoteTimeoutOptionUsesSharedDeadline`, `/最小期限`, `/自訂期限`, and `TestRemoteTimeoutBeforeDNSKeepsExecutionFailure` each have named `run`→`pass` events without Skip. The existing `TestRemoteSharesOneDeadlineAcrossNetworkStages` also passed by name, and all packages completed successfully.
-
-This closes S03-V03 for Windows amd64 native normal/race verification. Tests use the standard `testing/synctest` virtual clock, retain the 1 ms minimum and verify a custom timeout, removing the scheduling assumption that DNS must begin within a real millisecond. Expiry before DNS must prevent DNS/dialing and still report an execution error with exit code 2. Product behavior for the shared deadline, timeout range, and exit codes is unchanged. The Windows race failure in CI 44462742449 remains pre-fix evidence; cross-compilation is not substituted for this native result.
-
-This CI result does not provide real Windows Console, keyboard Tab, or settings-menu acceptance, nor the outstanding Bash/Fish shell checks. Those items and official package installation/upgrades remain pending.
-
-### Windows executable automated acceptance without Go
-
-Verified the user-supplied `results.json` from Windows X64, OS version `10.0.26200.0`, PowerShell `7.6.10`, and executable version `acceptance-75a1c67`, built from product commit `75a1c673a1ddc2d10b22b96c985d991f985acef6`. This evidence comes from the user running the acceptance bundle on Windows and is recorded separately from GitHub Actions results above.
-
-The report contains 53 unique cases, all PASS with 0 FAIL. Both completion variants have 18 successful process calls each without unexpected diagnostics. Other checks cover version output, help in three languages, arguments, four formats, report overwrite protection, and rejection of settings without a TTY. Process records contain 42 exit codes of 0 and 11 expected error exit codes of 2. Before/after fingerprints match for daily configuration, isolated configuration, and the debug sentinel.
-
-| Verified artifact | SHA-256 |
-|---|---|
-| Acceptance `tlscheck.exe` | `f6a807a47b6eb8b8fea2a4cb1a4fca029657e215002a567cc8063ee15b414ff2` |
-| Acceptance `test-windows.ps1` | `9eeefa4cd31579870fe6157be5711a7be3b2d2a499de769cabd923800293799e` |
-
-Both hashes match the delivered artifacts. The product commit does not imply that the acceptance script is included in that commit; the script is traced by its independent hash, with no claim that it has passed Windows CI. The original report is retained only as private acceptance evidence, without publishing personal paths or configuration information.
-
-This completes Windows executable automated acceptance. Actual keyboard Tab, interactive settings save, and Console mode restoration were not exercised and remain pending. Outstanding Bash/Fish and official package installation/upgrade checks also remain open; S09 as a whole is not complete.
-
-## Command references
-
-Template syntax was checked against the official [Homebrew tap documentation](https://docs.brew.sh/Taps), [Homebrew command reference](https://docs.brew.sh/Manpage), [Scoop buckets](https://github.com/ScoopInstaller/Scoop/wiki/Buckets) and [Scoop commands](https://github.com/ScoopInstaller/Scoop/wiki/Commands). This does not verify any tlscheck package or installation.
-
-## Implemented local validation
-
-Use Go 1.27.4, GoReleaser 2.14.3 and Python 3. Run from the repository root:
+Go 1.27.4, GoReleaser 2.14.3, and Python 3 match the current workflows. Use a native Go/C toolchain for race detection. Run from the repository root:
 
 ```sh
-goreleaser check
-python3 -B -m unittest discover -s scripts -v
-goreleaser release --snapshot --clean --skip=publish
-python3 -B scripts/release.py verify
-python3 -B scripts/install_check.py
+git status --short
+git rev-parse HEAD
+go test ./...
+go test -race ./...
+go vet ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+git diff --check
 ```
 
-The first four commands produce and check `dist/tlscheck_0.0.0-snapshot_<source>...` artifacts using the naming template `tlscheck_<version>_<os>_<arch>`. The exact snapshot version is `0.0.0-snapshot-<short-commit>-dirty`; the suffix is deliberately retained for all snapshots, including clean CI checkouts, to distinguish them from official tagged builds. GoReleaser sets its commit metadata from HEAD; a snapshot can include uncommitted changes and must not be presented as that commit's official release. `--clean` replaces only `dist/`; preserve any artifacts you need first. The configuration disables GoReleaser publishing entirely; the explicit publisher is a separate program.
+The local `govulncheck` command scans the active Go build target. The separate [Go vulnerability workflow](../.github/workflows/go-vulnerability.yml) scans darwin/windows × amd64/arm64 with `CGO_ENABLED=0` using pinned govulncheck v1.10.0. Tools are installed for the runner host before target settings are applied to the scan. The text-mode exit code is the gate, because JSON/SARIF modes have different exit semantics.
 
-`install_check.py` installs the native executable in a temporary directory, repeats replacement as a local reinstall/upgrade check, runs `--version`, and verifies the real configuration and an isolated sentinel are unchanged. It does not install Homebrew/Scoop packages or prove an upgrade between distinct published versions. Archive names include `darwin`/`windows` and `amd64`/`arm64`; macOS archives are tar.gz, Windows archives are zip. Each includes the executable, LICENSE, both README files and both maintenance documents. `checksums.txt` contains SHA-256 for all four archives. File timestamps are fixed to the source commit for repeatable builds.
+Four-target source scans passed locally with Go 1.27.4 and reported no reachable known vulnerabilities. Verify the remote workflow result for the exact candidate commit before publication. A scan covers known vulnerabilities for its toolchain, target, and database state, rather than establishing complete security.
 
-To generate local Formula and manifest files for this snapshot, substitute its exact version including the leading `v`; this only writes `dist/tlscheck.rb` and `dist/tlscheck.json`. Snapshot URLs in these files do not exist on GitHub and must not be published as stable packages.
+**Release wiring:** [release.yml](../.github/workflows/release.yml) currently waits for reusable [ci.yml](../.github/workflows/ci.yml). It does not automatically wait for the independent vulnerability workflow. The maintainer must verify successful scans for the same source commit before creating the release tag. This documentation update does not add an automated dependency or change publication permissions.
 
-```text
-python3 -B scripts/release.py packages --tag v0.0.0-snapshot-SHORTCOMMIT-dirty
-```
+### Package without publishing
 
-Optional Make targets: `make release-check`, `make snapshot`, `make verify-packages`. Python is maintenance tooling only, not a runtime requirement for the CLI.
+Set Python UTF-8 behavior for the current session before running maintenance tools.
 
-Python maintenance tools and tests explicitly use UTF-8 for text files and captured subprocess text. Both CI and release workflows set `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8` globally, preventing the Windows default code page from breaking Chinese YAML or log messages. Before running the Python commands manually, configure the current terminal session:
+macOS / Linux shell:
 
-```bash
+```sh
 export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
 ```
 
@@ -156,35 +136,48 @@ $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 ```
 
-These settings apply only to the current session and its children, without changing user-wide settings. Encoding regressions disable UTF-8 mode in a child process, treat implicit-encoding warnings as errors, and check installation/lint boundaries and Chinese stdout/stderr. The Windows amd64 CI run above separately passed these regressions; local simulation and native execution are recorded as distinct evidence.
+Preserve any files you need from `dist/` first. `--clean` replaces that output directory.
 
+```sh
+goreleaser --version
+goreleaser check
+python3 -B -m unittest discover -s scripts -v
+goreleaser release --snapshot --clean --skip=publish
+python3 -B scripts/release.py verify
+```
 
-## Protected release workflow
+On a supported native macOS/Windows host, verify the matching snapshot installation:
 
-`.github/workflows/ci.yml` tests on `macos-15` (arm64), `macos-15-intel` (amd64) and `windows-2025` (amd64). Native jobs download and install the snapshot archive in isolation; Windows arm64 remains cross-build only. The successful run above confirms all three native jobs and the packages job; it does not cover real Console/full completion interaction or package-manager acceptance. Actions are pinned to commit SHAs, Go to 1.27.4 and GoReleaser to 2.14.3.
+```sh
+python3 -B scripts/install_check.py
+```
 
-`.github/workflows/release.yml` accepts a pushed `v*` tag or a manual rerun on that tag. It requires the reusable CI checks, repository variable `ENABLE_RELEASE=true` and the `release` environment. Configure required reviewers and tag restrictions on that environment before enabling the variable. No environment or secret has been created by this change. Set `PACKAGE_REPOSITORY_TOKEN` as a fine-grained credential limited to contents read/write on `vincent119/homebrew-tap` and `vincent119/scoop-bucket`; main-repository publication uses the job's `GITHUB_TOKEN` with contents write. The script reads it as `GH_TOKEN`. Do not provide secrets to pull-request checks.
+Do not run the native installation check on Linux expecting a Linux archive. The configured matrix produces four archives for macOS/Windows only. A Linux host can cross-build those archives without proving native installation.
 
-The publisher additionally requires `--execute`, `RELEASE_APPROVED` equal to the exact tag, clean source, HEAD/tag equality and matching GoReleaser metadata. It creates a draft, pins its source commit in the body, fills only missing assets, downloads and compares every asset, then marks the release published. An existing release with unknown source or different same-name bytes stops. A package update rechecks the published assets, skips prereleases and newer stable versions, accepts identical same-version content, rejects conflicting same-version content and uses GitHub Contents API SHA conditions against concurrent changes. Release jobs share one noncancelling concurrency group to serialize package updates.
+Snapshot versions use `0.0.0-snapshot-<short-commit>-dirty`, including clean CI runs. A snapshot can include uncommitted files, so its HEAD metadata alone does not identify its full content. Archives are named `tlscheck_<version>_<os>_<arch>`, with macOS tar.gz and Windows ZIP. Each contains the binary, LICENSE, both README files, and both maintenance guides. `checksums.txt` covers all four archives.
 
-Retry by rerunning the same tag workflow after reviewing the failed stage. The release must retain its source marker. Do not delete it to bypass a mismatch. A package failure after a successful Release leaves that Release intact; a rerun verifies it and continues. Controlled tests simulate these transitions without contacting GitHub. Real remote retry and package-manager install/upgrade remain pending. Current artifacts are unsigned and unnotarized.
+`install_check.py` installs and reinstalls in a temporary directory, checks `--version`, and verifies real configuration and an isolated sentinel are unchanged. It proves neither package-manager installation nor a cross-version upgrade. GoReleaser has publishing disabled in [.goreleaser.yaml](../.goreleaser.yaml). `scripts/release.py verify` performs local archive validation.
 
-## Review fixes and retry details
+`packages --tag` generates local `dist/tlscheck.rb` and `dist/tlscheck.json`. The tag must match the exact archive version with a leading `v`. Snapshot URLs are not real GitHub downloads and must never be submitted as stable package updates. Use `python3 -B scripts/release.py --help` for the stage interface.
 
-The publisher enumerates authenticated Release pages to locate both drafts and published releases. Multiple releases for one tag are rejected. Only a source-verified, still-unpublished draft may have an empty `state=starter` asset removed and retried; normal uploaded assets, nonempty failed assets and published-release conflicts remain protected. Before the final publish request, the newest stable version is compared and `make_latest` is set explicitly, so publishing an older version does not replace Latest. Prereleases never become the stable Latest.
+For workflow lint, install the pinned Actionlint v1.7.12 and run `python3 -B scripts/lint_workflows.py`. The wrapper accepts only the precise unsupported `queue: max` diagnostic after checking its contract. All other diagnostics remain failures.
 
-The shared release concurrency group uses `queue: max` and `cancel-in-progress: false`. GitHub allows up to 100 pending runs; overflow can still be canceled and queue order is not guaranteed to match tag/version order. Version comparisons remain necessary. Actionlint 1.7.12 does not yet recognize this official property. CI uses `scripts/lint_workflows.py` to validate the exact concurrency contract and accept only that precise unknown-field diagnostic at the expected file/line; all other errors remain fatal. Run it with `python3 -B scripts/lint_workflows.py` after installing the pinned Actionlint. Once the tool supports the property, the wrapper still validates the queue contract with no diagnostic exception needed. Hosted queue behavior remains untested locally.
+## Publication controls and retry
 
-Certificate SAN URIs are displayed individually. Hierarchical URI identity paths, including SPIFFE paths, are preserved; user information, query and fragment are removed. Opaque or invalid URIs are represented by `[URI]` instead of reflecting potentially embedded credentials. General public text and local paths are not guessed to be network URLs; terminal controls are removed.
+The [release workflow](../.github/workflows/release.yml) starts on a pushed `v*` tag or manual dispatch. Its publication job additionally requires a tag ref, `ENABLE_RELEASE=true`, successful reusable CI, and the `release` environment. Package updates additionally require manual dispatch with `update_packages=true`, which defaults to false. Tag-triggered releases never update Homebrew/Scoop automatically. Configure required reviewers and tag restrictions before enabling the variable. This document does not create those settings or grant permission to publish.
 
-## CLI compatibility update
+The main repository uses the publication job's `GITHUB_TOKEN` with contents write, exposed to the publisher as `GH_TOKEN`. `PACKAGE_REPOSITORY_TOKEN` must be a fine-grained credential limited to the two approved package repositories. Pull-request checks receive no publication secrets.
 
-See [README](../README.md) for table-default reporting, four formats and protected output, forced local/remote inputs, language overrides, settings and four-shell completion. Ordinary commands still never write configuration; explicit settings save is the exception. Automated Windows amd64 ACL/commit regressions passed; real Windows Console operation and full interactive shell completion still need acceptance testing. Windows arm64 is cross-build only. Official publishing still requires separate authorization.
+The publisher requires `--execute`, `RELEASE_APPROVED` equal to the exact tag, a clean worktree, HEAD equal to the tag commit, and matching GoReleaser metadata. It creates a draft, records the source commit, uploads missing assets, downloads and compares every asset, and then publishes. Unknown sources, unexpected assets, or different bytes under an existing name stop the process.
 
-The eight CLI review fixes have regression coverage for completion debug writes, empty flag values, shell help, terminal disconnect, ACL preservation/failure cleanup, advice codes, table delimiters, and per-input summaries. macOS ACL handling uses bounded native attribute calls; CLI runtime does not depend on chmod/Python, which are test tools only. Windows DACL, read-only atomic replacement, and failure-cleanup regressions passed in the Windows amd64 CI run above; this does not validate every Windows/filesystem combination.
+Package updates recheck the published assets. Prereleases leave stable packages unchanged. Newer package versions are not downgraded, identical same-version content is accepted, and conflicting same-version content is rejected. GitHub Contents API SHA conditions protect against concurrent updates. All release jobs share the noncancelling `tlscheck-stable-release` concurrency group with `queue: max`. Queue order is not assumed to be version order, so version checks remain necessary.
 
-## CI packaging-tool PATH fix
+| Failure stage | Retry rule |
+|---|---|
+| Code checks, vulnerability scan, or packaging | Correct the cause and repeat the failed check against the candidate. Keep the original result. |
+| Draft assets incomplete | Reverify source and all existing assets before filling missing ones. Only a source-verified unpublished draft can have an empty `starter` asset removed and retried. |
+| Published assets conflict | Stop for review. Do not overwrite assets, recreate the tag, or delete source markers. |
+| Release succeeded, package update failed | Keep the Release intact. Rerun the same authorized tag workflow after reviewing the failed stage. |
+| Old version is retried | Compare stable versions again. Older versions must not replace Latest or downgrade packages. |
 
-The pinned action adds its installation directory to later steps only when `install-only: true`. CI now explicitly installs v2.14.3, then runs `goreleaser --version`, `goreleaser check`, and the existing snapshot in shell steps. The action SHA, read-only contents permissions, `--snapshot --skip=publish`, and release.disable remain unchanged. Regression checks cover installation/execution order and nonpublishing behavior; the packages job above passed tool-version, configuration, workflow-syntax, and four-target trial-build checks.
-
-Behavior reference: [pinned action source](https://github.com/goreleaser/goreleaser-action/blob/e435ccd777264be153ace6237001ef4d979d3a7a/src/main.ts).
+A successful release needs actual download, checksum, version, package installation/upgrade, and configuration-preservation evidence for the agreed scope. Controlled FakeAPI tests cover retry decisions, not live GitHub publication. Cross-version upgrades, real remote retries, signing/notarization, and the remaining manual checks still need their own acceptance records. See the [README](../README.md) for the current CLI contract.

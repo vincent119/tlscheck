@@ -3,6 +3,12 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      update_packages:
+        description: '明確核准更新 Homebrew／Scoop，僅正式 Release 完成後執行'
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 env:
@@ -45,6 +51,7 @@ jobs:
           python3 scripts/release.py verify
           python3 scripts/release.py publish --tag "$RELEASE_TAG" --execute
       - name: 成功發佈後更新穩定套件
+        if: github.event_name == 'workflow_dispatch' && inputs.update_packages == true
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_REPOSITORY_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}

@@ -124,6 +124,17 @@ assert suite.countTestCases() > 0, '未載入任何測試'
         config = Path('.goreleaser.yaml').read_text(encoding='utf-8')
         self.assertRegex(config, r'(?m)^release:\n  disable: true$')
 
+    def test_tag_release_cannot_implicitly_update_package_repositories(self):
+        text = Path('.github/workflows/release.yml').read_text(encoding='utf-8')
+        self.assertRegex(text, r'(?m)^      update_packages:\n(?:        [^\n]*\n)*        default: false$',
+                         '套件更新必須有預設關閉的手動選項')
+        update = text.split('      - name: 成功發佈後更新穩定套件\n', 1)[1]
+        self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.update_packages == true", update,
+                      'tag發佈不得自動寫入Homebrew或Scoop')
+        self.assertIn('python3 scripts/release.py update --tag "$RELEASE_TAG" --execute', update)
+        self.assertIn('vars.ENABLE_RELEASE', text, '原本發佈開關不得移除')
+        self.assertIn('environment: release', text, '原本環境核准不得移除')
+
 
 if __name__ == '__main__':
     unittest.main()
