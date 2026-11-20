@@ -11,6 +11,8 @@ tlscheck checks remote TLS certificates, local certificate chains, and certifica
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
+[Changelog](CHANGELOG.md)
+
 The default report is a table. JSON, offline HTML, and Markdown are also available, with messages in English, Traditional Chinese, or Simplified Chinese. Remote checks keep handshake facts separate from trust verification and never use local private keys for client authentication.
 
 ## Installation

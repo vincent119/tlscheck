@@ -11,6 +11,8 @@ tlscheck 用來檢查遠端 TLS 憑證、本機憑證鏈與憑證／私鑰配對
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
+[版本變更紀錄](CHANGELOG.zh-TW.md)
+
 預設以表格呈現，也能輸出 JSON、離線 HTML 與 Markdown。訊息支援英文、繁體中文和簡體中文。遠端握手的觀測結果與信任驗證分開顯示，本機私鑰只留在本機。
 
 ## 安裝
